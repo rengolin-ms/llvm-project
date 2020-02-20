@@ -1,0 +1,183 @@
+/* Copyright Microsoft Corp. 2020 */
+#ifndef _PARSER_H_
+#define _PARSER_H_
+
+#include <cassert>
+#include <map>
+#include <memory>
+#include <set>
+#include <string>
+#include <vector>
+
+#include "AST.h"
+
+namespace Knossos {
+namespace AST {
+
+//================================================ Tokeniser / Lexer
+
+/// A token that has either value or children
+/// Values are literals, variables, names, reserved words, types
+/// Non-Values are lets, def/decl, ops, calls, control flow
+///
+/// Do not confuse with "continuation values", those are higher level.
+///
+/// Using raw pointers instead of shared because I think it should be unique
+/// but the ownership model can be a little confusing, so making it simple
+/// for now and deleting the pointers on exit.
+struct Token {
+  using Ptr = std::unique_ptr<Token>;
+  Token(std::string str) : value(str) {}
+  Token() {}
+
+  void addChild(Token::Ptr tok) {
+    assert(!isValue() && "Can't add children to values");
+    children.push_back(std::move(tok));
+  }
+  llvm::ArrayRef<Ptr> getChildren() const {
+    assert(!isValue() && "No children in a value token");
+    return children;
+  }
+  llvm::StringRef getValue() const {
+    assert(isValue() && "Not a value token");
+    return value;
+  }
+  const Token *getChild(size_t idx) const {
+    assert(!isValue() && "No children in a value token");
+    assert(idx < children.size() && "Offset error");
+    return children[idx].get();
+  }
+
+  const Token *getHead() const {
+    assert(!isValue() && "No children in a value token");
+    assert(children.size() > 0 && "No head");
+    return children[0].get();
+  }
+  llvm::ArrayRef<Ptr> getTail() const {
+    assert(!isValue() && "No children in a value token");
+    assert(children.size() > 1 && "No tail");
+    return llvm::ArrayRef<Ptr>(children).slice(1);
+  }
+
+  bool isValue() const { return !value.empty(); }
+  size_t size() const { return children.size(); }
+
+  void dump(size_t tab = 0) const;
+
+private:
+  std::string value;
+  std::vector<Ptr> children;
+};
+
+/// Tokenise the text into recursive tokens grouped by parenthesis.
+///
+/// The Lexer will pass the ownership of the Tokens to the Parser.
+class Lexer {
+  std::string code;
+  size_t len;
+  Token::Ptr root;
+
+  /// Build a tree of tokens
+  size_t lexToken(Token *tok, size_t pos);
+
+public:
+  Lexer(llvm::StringRef code)
+      : code(code), len(code.size()), root(new Token()) {
+    assert(len > 0 && "Empty code?");
+  }
+
+  Token::Ptr lex() {
+    lexToken(root.get(), 0);
+    return std::move(root);
+  }
+};
+
+//================================================ Parse Tokens into Nodes
+
+/// Identify each token as an AST node and build it.
+/// The parser will take ownership of the Tokens.
+class Parser {
+  Token::Ptr rootT;
+  Expr::Ptr rootE;
+  Lexer lex;
+
+  // Lookup table of reserved operations and keywords
+  // Don't use StringRef, as data() doesn't need to be null terminated.
+  // TODO: add all words
+  const std::set<std::string> reservedOps{
+      "add@ii", "sub@ii", "mul@ii", "div@ii",
+      "add@ff", "sub@ff", "mul@ff", "div@ff"
+  };
+  bool isReservedOp(std::string name) const {
+    return reservedOps.find(name) != reservedOps.end();
+  }
+  const std::set<std::string > reservedWords{
+      "let", "edef", "def", "if"
+  };
+  bool isReservedWord(std::string name) const {
+    return reservedWords.find(name) != reservedWords.end();
+  }
+  /// Simple symbol table for parsing only (no validation)
+  struct Symbols {
+    std::map<std::string, Expr*> Symbols;
+    bool exists(std::string name) {
+      return Symbols.find(name) != Symbols.end();
+    }
+    bool add(std::string name, Expr* val) {
+      auto result = Symbols.insert({name, val});
+      return result.second;
+    }
+    Expr* get(std::string name) {
+      if (exists(name))
+        return Symbols[name];
+      return nullptr;
+    }
+  };
+  Symbols functions;
+  Symbols variables;
+
+  // Variable initialiser mangling
+  // TODO: Add context names to it
+  std::string mangleVariableInit(llvm::StringRef name) const {
+    return std::string("__var_init_")+name.str();
+  }
+
+  // Build AST nodes from Tokens
+  Expr::Ptr parseToken(const Token *tok);
+  // Specific Token parsers
+  Expr::Ptr parseBlock(const Token *tok);
+  Expr::Ptr parseValue(const Token *tok);
+  Expr::Ptr parseCall(const Token *tok);
+  Expr::Ptr parseOperation(const Token *tok);
+  Expr::Ptr parseVariable(const Token *tok);
+  Expr::Ptr parseLet(const Token *tok);
+  Expr::Ptr parseDecl(const Token *tok);
+  Expr::Ptr parseDef(const Token *tok);
+  Expr::Ptr parseCond(const Token *tok);
+
+public:
+  Parser(std::string code) : lex(std::move(code)) { }
+
+  void tokenise() {
+    assert(!rootT && "Won't overwrite root token");
+    rootT = lex.lex();
+  }
+  void parse() {
+    assert(!rootE && "Won't overwrite root node");
+    if (!rootT) tokenise();
+    rootE = parseToken(rootT.get());
+  }
+  const Token* getRootToken() {
+    return rootT.get();
+  }
+  const Expr* getRootNode() {
+    return rootE.get();
+  }
+  Expr::Ptr moveRoot() {
+    return std::move(rootE);
+  }
+};
+
+} // namespace AST
+} // namespace Knossos
+#endif /// _PARSER_H_
