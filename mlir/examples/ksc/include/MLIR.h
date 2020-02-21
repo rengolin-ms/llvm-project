@@ -9,7 +9,12 @@
 #include "mlir/IR/MLIRContext.h"
 #include "mlir/IR/Module.h"
 #include "mlir/Pass/PassManager.h"
+#include "mlir/Target/LLVMIR.h"
+#include "mlir/Transforms/Passes.h"
+#include "mlir/InitAllDialects.h"
+
 #include "llvm/ADT/StringRef.h"
+#include "llvm/IR/Module.h"
 
 #include "AST.h"
 
@@ -22,8 +27,8 @@ class Generator {
   mlir::OwningModuleRef module;
   // The current builder
   mlir::OpBuilder builder;
-  // The lowering pass manager
-  mlir::PassManager pm;
+  // The global context
+  mlir::MLIRContext context;
   // A default location, ignoring source loc for now
   mlir::Location UNK;
   // Current function (for basic block placement)
@@ -54,11 +59,16 @@ class Generator {
                             mlir::Value val = nullptr);
 
 public:
-  Generator(mlir::MLIRContext &context)
-      : builder(&context), pm(&context), UNK(builder.getUnknownLoc()) {}
+  Generator() : builder(&context), UNK(builder.getUnknownLoc()) {
+    mlir::registerAllDialects();
+  }
 
-  const mlir::ModuleOp build(const std::string& mlirFileName);
+  // Build from MLIR source
+  const mlir::ModuleOp build(const std::string& mlir);
+  // Build from KSC AST
   const mlir::ModuleOp build(const AST::Expr* root);
+  // Emit LLVM IR
+  std::unique_ptr<llvm::Module> emitLLVM();
 };
 
 } // namespace MLIR

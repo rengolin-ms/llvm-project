@@ -12,7 +12,9 @@
 #include "mlir/IR/Dialect.h"
 #include "mlir/Transforms/Passes.h"
 #include "mlir/Parser.h"
+#include "mlir/Conversion/StandardToLLVM/ConvertStandardToLLVMPass.h"
 #include "mlir/IR/StandardTypes.h"
+#include "mlir/Pass/Pass.h"
 
 #include "MLIR.h"
 
@@ -299,4 +301,26 @@ const mlir::ModuleOp Generator::build(const std::string& mlir) {
   module = mlir::parseSourceFile(sourceMgr, builder.getContext());
   assert(!mlir::failed(mlir::verify(*module)) && "Validation failed!");
   return module.get();
+}
+
+//============================================================ LLVM IR Lowering
+
+unique_ptr<llvm::Module> Generator::emitLLVM() {
+  // The lowering pass manager
+  mlir::PassManager pm(&context);
+  pm.addPass(mlir::createInlinerPass());
+  pm.addPass(mlir::createSymbolDCEPass());
+  mlir::OpPassManager &optPM = pm.nest<mlir::FuncOp>();
+  optPM.addPass(mlir::createCanonicalizerPass());
+  optPM.addPass(mlir::createCSEPass());
+  pm.addPass(mlir::createLowerToLLVMPass());
+
+  // First lower to LLVM dialect
+  if (mlir::failed(pm.run(module.get())))
+    return nullptr;
+
+  // Then lower to LLVM IR
+  auto llvmModule = mlir::translateModuleToLLVMIR(module.get());
+  assert(llvmModule);
+  return llvmModule;
 }
