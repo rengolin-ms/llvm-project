@@ -155,7 +155,7 @@ void test_parser_decl() {
 void test_parser_def() {
   cout << "\n == test_parser_def\n";
   const Expr::Ptr tree =
-      parse("(def fun Integer ((x : Integer)) (add@ii x 10))");
+      parse("(def fun Integer ((x : Integer) (y : Integer)) (add@ii x 10))");
 
   // Root can have many exprs, here only one
   Block* root = llvm::dyn_cast<Block>(tree.get());
@@ -166,7 +166,7 @@ void test_parser_def() {
   // Definition has 4 parts: name, return type, arg types def, expr
   assert(def->getName() == "fun");
   assert(def->getType() == Expr::Type::Integer);
-  assert(def->size() == 1);
+  assert(def->size() == 2);
   Variable* x = llvm::dyn_cast<Variable>(def->getArgument(0));
   assert(x->getType() == Expr::Type::Integer);
   Block* body = llvm::dyn_cast<Block>(def->getImpl());

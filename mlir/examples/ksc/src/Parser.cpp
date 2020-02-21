@@ -108,7 +108,8 @@ size_t Lexer::lexToken(Token *tok, size_t pos) {
             make_unique<Token>(code.substr(tokenStart, pos - tokenStart)));
       }
       // Finished parsing this token
-      return ++pos;
+      tokenStart = ++pos;
+      return pos;
     case '(': {
       // Recurse into sub-tokens
       auto t = make_unique<Token>();
@@ -116,11 +117,9 @@ size_t Lexer::lexToken(Token *tok, size_t pos) {
       tok->addChild(move(t));
       break;
     }
-    default: {
+    default:
       // These are text, so we keep reading
       pos++;
-      break;
-    }
     }
   }
   return pos;
