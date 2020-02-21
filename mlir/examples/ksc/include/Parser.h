@@ -136,12 +136,6 @@ class Parser {
   Symbols functions;
   Symbols variables;
 
-  // Variable initialiser mangling
-  // TODO: Add context names to it
-  std::string mangleVariableInit(llvm::StringRef name) const {
-    return std::string("__var_init_")+name.str();
-  }
-
   // Build AST nodes from Tokens
   Expr::Ptr parseToken(const Token *tok);
   // Specific Token parsers
