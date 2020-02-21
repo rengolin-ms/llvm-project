@@ -82,8 +82,7 @@ lowering to specific hardware.
 
 **Back-end TODO:**
  * Add support for local variables (context) & finish Knossos IR support.
- * Run through multiple examples (../test), add FileCheck validation.
- * Allow MLIR round-trip, add tests for that.
+ * Run through multiple Ksc examples, add FileCheck validation.
 
 **Engine TODO:**
  * Cost Model: liveness analysis, target-specific hooks, PGO, etc.

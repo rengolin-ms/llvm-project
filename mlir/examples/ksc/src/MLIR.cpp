@@ -4,11 +4,14 @@
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Support/Casting.h"
+#include "llvm/Support/SourceMgr.h"
 
 #include "mlir/Analysis/Verifier.h"
 #include "mlir/Dialect/StandardOps/Ops.h"
 #include "mlir/IR/Attributes.h"
 #include "mlir/IR/Dialect.h"
+#include "mlir/Transforms/Passes.h"
+#include "mlir/Parser.h"
 #include "mlir/IR/StandardTypes.h"
 
 #include "MLIR.h"
@@ -54,7 +57,7 @@ const mlir::ModuleOp Generator::build(const AST::Expr* root) {
   auto rB = llvm::dyn_cast<AST::Block>(root);
   buildGlobal(rB);
   assert(!mlir::failed(mlir::verify(*module)) && "Validation failed!");
-  return *module;
+  return module.get();
 }
 
 // Global context, allowing declarations and definitions.
@@ -283,4 +286,17 @@ mlir::Attribute Generator::getAttr(const AST::Expr* op) {
   default:
     assert(0 && "Unimplemented literal type");
   }
+}
+
+//============================================================ MLIR round-trip
+
+const mlir::ModuleOp Generator::build(const std::string& mlir) {
+  // Parse the input mlir
+  llvm::SourceMgr sourceMgr;
+  llvm::ErrorOr<std::unique_ptr<llvm::MemoryBuffer>> srcOrErr =
+      llvm::MemoryBuffer::getMemBufferCopy(mlir);
+  sourceMgr.AddNewSourceBuffer(std::move(*srcOrErr), llvm::SMLoc());
+  module = mlir::parseSourceFile(sourceMgr, builder.getContext());
+  assert(!mlir::failed(mlir::verify(*module)) && "Validation failed!");
+  return module.get();
 }

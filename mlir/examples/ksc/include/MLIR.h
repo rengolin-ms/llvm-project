@@ -57,6 +57,7 @@ public:
   Generator(mlir::MLIRContext &context)
       : builder(&context), pm(&context), UNK(builder.getUnknownLoc()) {}
 
+  const mlir::ModuleOp build(const std::string& mlirFileName);
   const mlir::ModuleOp build(const AST::Expr* root);
 };
 

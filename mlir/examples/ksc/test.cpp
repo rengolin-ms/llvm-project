@@ -25,18 +25,24 @@ Expr::Ptr parse(const string &code) {
   return p.moveRoot();
 }
 
-mlir::ModuleOp build(const string &code) {
-  auto tree = parse(code);
+void build(const string &code, bool fromMLIR=false) {
+  Expr::Ptr tree;
+  if (!fromMLIR)
+    tree = parse(code);
+
   mlir::MLIRContext context;
   Generator g{context};
   if (verbose > 0)
     cout << " -- MLIR\n";
-  auto module = g.build(tree.get());
+  mlir::ModuleOp module;
+  if (fromMLIR)
+    module = g.build(code);
+  else
+    module = g.build(tree.get());
   if (verbose > 0) {
     module.dump();
     cout << endl;
   }
-  return module;
 }
 
 // ======================================================= Lexer test
@@ -321,6 +327,28 @@ void test_mlir_variations() {
   cout << "    OK\n";
 }
 
+void test_mlir_roundtrip() {
+  cout << "\n == test_mlir_roundtrip\n";
+  build(
+"module {"
+"  func @print(f64) -> f64"
+"  func @fun(%arg0: i64, %arg1: f64) -> i64 {"
+"    %0 = \"std.constant\"() {value = 1.500000e+00 : f64} : () -> f64"
+"    %1 = \"std.mulf\"(%arg1, %0) : (f64, f64) -> f64"
+"    %2 = \"std.constant\"() {value = 10 : i64} : () -> i64"
+"    %3 = \"std.addi\"(%arg0, %2) : (i64, i64) -> i64"
+"    \"std.return\"(%3) : (i64) -> ()"
+"  }"
+"  func @main() -> i64 {"
+"    %0 = \"std.constant\"() {value = 42 : i64} : () -> i64"
+"    %1 = \"std.constant\"() {value = 1.000000e+01 : f64} : () -> f64"
+"    %2 = \"std.call\"(%0, %1) {callee = @fun} : (i64, f64) -> i64"
+"    \"std.return\"(%2) : (i64) -> ()"
+"  }"
+"}", /*from MLIR=*/true);
+  cout << "    OK\n";
+}
+
 int main(int argc, char **argv) {
   if (argc > 1) {
     auto arg = string(argv[1]);
@@ -348,6 +376,7 @@ int main(int argc, char **argv) {
   test_mlir_cond();
 
   test_mlir_variations();
+  test_mlir_roundtrip();
 
   cout << "\nAll tests OK\n"
        << "Use -v to see the MLIR dump\n"
