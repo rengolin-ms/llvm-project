@@ -312,6 +312,15 @@ void test_mlir_cond() {
   cout << "    OK\n";
 }
 
+void test_mlir_variations() {
+  cout << "\n == test_mlir_variations: Multiple args, last return\n";
+  build("(edef print Float (Float))"
+        "(def fun Integer ((x : Integer) (y : Float))"
+        "                 ((mul@ff y 1.5) (add@ii x 10)))"
+        "(def main Integer () (fun 42 10.0)");
+  cout << "    OK\n";
+}
+
 int main(int argc, char **argv) {
   if (argc > 1) {
     auto arg = string(argv[1]);
@@ -337,6 +346,8 @@ int main(int argc, char **argv) {
   test_mlir_let();
   test_mlir_decl_def_use();
   test_mlir_cond();
+
+  test_mlir_variations();
 
   cout << "\nAll tests OK\n"
        << "Use -v to see the MLIR dump\n"

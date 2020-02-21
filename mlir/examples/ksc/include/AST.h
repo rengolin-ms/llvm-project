@@ -281,12 +281,13 @@ struct Definition : public Expr {
   Definition(llvm::StringRef name, Expr::Type type, Expr::Ptr impl)
       : Expr(type, Expr::Kind::Definition), impl(std::move(impl)) {
     proto = std::make_unique<Declaration>(name, type);
-    for (auto &a : arguments)
-      proto->addArgType(a->getType());
   }
 
   /// Arguments and return type (for name and type validation)
-  void addArgument(Expr::Ptr node) { arguments.push_back(std::move(node)); }
+  void addArgument(Expr::Ptr node) {
+    proto->addArgType(node->getType());
+    arguments.push_back(std::move(node));
+  }
   llvm::ArrayRef<Expr::Ptr> getArguments() const { return arguments; }
   Expr *getArgument(size_t idx) {
     assert(idx < arguments.size() && "Offset error");
