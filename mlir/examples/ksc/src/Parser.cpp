@@ -92,34 +92,44 @@ size_t Lexer::lexToken(Token *tok, size_t pos) {
   size_t tokenStart = pos;
   while (pos < len) {
     switch (code[pos]) {
-    case ' ':
-      // Maybe end of a value
-      if (tokenStart != pos) {
-        tok->addChild(
-            make_unique<Token>(code.substr(tokenStart, pos - tokenStart)));
+      case ';':
+        // Comment, to the end of the line
+        while (code[pos] != '\n')
+          tokenStart = ++pos;
+        break;
+      case ' ':
+        // Maybe end of a value
+        if (tokenStart != pos) {
+          tok->addChild(
+              make_unique<Token>(code.substr(tokenStart, pos - tokenStart)));
+        }
+        // Or end of a token, which we ignore
+        tokenStart = ++pos;
+        break;
+      case ')':
+        // Maybe end of a value
+        if (tokenStart != pos) {
+          tok->addChild(
+              make_unique<Token>(code.substr(tokenStart, pos - tokenStart)));
+        }
+        // Finished parsing this token
+        tokenStart = ++pos;
+        return pos;
+      case '(': {
+        // Recurse into sub-tokens
+        auto t = make_unique<Token>();
+        tokenStart = pos = lexToken(t.get(), pos + 1);
+        tok->addChild(move(t));
+        break;
       }
-      // Or end of a token, which we ignore
-      tokenStart = ++pos;
-      break;
-    case ')':
-      // Maybe end of a value
-      if (tokenStart != pos) {
-        tok->addChild(
-            make_unique<Token>(code.substr(tokenStart, pos - tokenStart)));
-      }
-      // Finished parsing this token
-      tokenStart = ++pos;
-      return pos;
-    case '(': {
-      // Recurse into sub-tokens
-      auto t = make_unique<Token>();
-      tokenStart = pos = lexToken(t.get(), pos + 1);
-      tok->addChild(move(t));
-      break;
-    }
-    default:
-      // These are text, so we keep reading
-      pos++;
+      case '\n':
+      case '\r':
+        // Ignore
+        tokenStart = ++pos;
+        break;
+      default:
+        // These are text, so we keep reading
+        pos++;
     }
   }
   return pos;
