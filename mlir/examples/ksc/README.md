@@ -51,7 +51,9 @@ $ cmake -G Ninja ../llvm \
         -DCMAKE_CXX_COMPILER=clang++ \
         -DLLVM_ENABLE_LLD=ON
 
-$ ninja ksc-test
+$ ninja ksc-mlir # builds the example
+
+$ ninja check-mlir # runs all MLIR LIT tests, including Ksc ones
 
 $ ./bin/ksc-mlir TEST -vvv # Runs the unit tests
 
