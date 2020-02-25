@@ -59,9 +59,7 @@ class Generator {
                             mlir::Value val = nullptr);
 
 public:
-  Generator() : builder(&context), UNK(builder.getUnknownLoc()) {
-    mlir::registerAllDialects();
-  }
+  Generator() : builder(&context), UNK(builder.getUnknownLoc()) { }
 
   // Build from MLIR source
   const mlir::ModuleOp build(const std::string& mlir);

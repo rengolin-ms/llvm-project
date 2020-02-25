@@ -51,7 +51,15 @@ $ cmake -G Ninja ../llvm \
         -DCMAKE_CXX_COMPILER=clang++ \
         -DLLVM_ENABLE_LLD=ON
 
-$ ninja ksc-test && ./bin/ksc-test -vvv
+$ ninja ksc-test
+
+$ ./bin/ksc-mlir TEST -vvv # Runs the unit tests
+
+$ ./bin/ksc-mlir AST foo.ks # Spits out AST
+
+$ ./bin/ksc-mlir MLIR foo.ks # Spits out MLIR
+
+$ ./bin/ksc-mlir LLVM foo.ks # Spits out LLVM IR
 ```
 
 If no error is reported (all "OK"), all is good.

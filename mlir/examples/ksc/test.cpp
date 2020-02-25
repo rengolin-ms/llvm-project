@@ -391,16 +391,9 @@ void test_llvm_ir() {
 }
 
 
-int main(int argc, char **argv) {
-  if (argc > 1) {
-    auto arg = string(argv[1]);
-    if (arg == "-v")
-      verbose = 1;
-    else if (arg == "-vv")
-      verbose = 2;
-    else if (arg == "-vvv")
-      verbose = 3;
-  }
+int test_all(int v=0) {
+  verbose = v;
+
   test_lexer();
 
   test_parser_block();
@@ -421,10 +414,6 @@ int main(int argc, char **argv) {
 
   test_llvm_ir();
 
-  cout << "\nAll tests OK\n"
-       << "Use -v to see the MLIR dump\n"
-       << "And -vv to also see the AST\n"
-       << "And -vvv to also see the tokens\n"
-       << endl;
+  cout << "\nAll tests OK\n";
   return 0;
 }
