@@ -297,8 +297,7 @@ Expr::Ptr Parser::parseLet(const Token *tok) {
   assert(tok->size() == 3);
   const Token *bond = tok->getChild(1);
   const Token *expr = tok->getChild(2);
-  assert(!bond->isValue() && !expr->isValue());
-  assert(bond->size() == 2);
+  assert(!bond->isValue() && bond->size() == 2);
   auto var = parseVariable(bond);
   auto body = parseToken(expr);
   return make_unique<Let>(move(var), move(body));
