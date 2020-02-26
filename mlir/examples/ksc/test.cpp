@@ -66,10 +66,10 @@ void test_lexer() {
   }
 
   // Root can have many exprs, here only one
-  assert(root->isValue() == false);
+  assert(root->isValue == false);
   const Token *tok = root->getChild(0);
   // Kind is not a value and has 5 sub-exprs
-  assert(tok->isValue() == false);
+  assert(tok->isValue == false);
   assert(tok->size() == 5);
   // Which are:
   assert(tok->getChild(0)->getValue() == "def");
@@ -95,7 +95,7 @@ void test_lexer() {
 
 void test_parser_block() {
   cout << "\n == test_parser_block\n";
-  const Expr::Ptr tree = parse("(10.0 42 \"Hello\")");
+  const Expr::Ptr tree = parse("(10.0 42 \"\" \" \" \"Hello\" \"Hello world\")");
 
   // Root can have many exprs, here only one
   Block* root = llvm::dyn_cast<Block>(tree.get());
@@ -103,7 +103,7 @@ void test_parser_block() {
   // Kind is Block and has 1 sub-expr
   Block* block = llvm::dyn_cast<Block>(root->getOperand(0));
   assert(block);
-  // Block has 3 literals
+  // Block has 6 literals
   Literal* op0 = llvm::dyn_cast<Literal>(block->getOperand(0));
   assert(op0);
   assert(op0->getValue() == "10.0");
@@ -114,8 +114,20 @@ void test_parser_block() {
   assert(op1->getType() == Expr::Type::Integer);
   Literal* op2 = llvm::dyn_cast<Literal>(block->getOperand(2));
   assert(op2);
-  assert(op2->getValue() == "\"Hello\"");
+  assert(op2->getValue() == "");
   assert(op2->getType() == Expr::Type::String);
+  Literal* op3 = llvm::dyn_cast<Literal>(block->getOperand(3));
+  assert(op3);
+  assert(op3->getValue() == " ");
+  assert(op3->getType() == Expr::Type::String);
+  Literal* op4 = llvm::dyn_cast<Literal>(block->getOperand(4));
+  assert(op4);
+  assert(op4->getValue() == "Hello");
+  assert(op4->getType() == Expr::Type::String);
+  Literal* op5 = llvm::dyn_cast<Literal>(block->getOperand(5));
+  assert(op5);
+  assert(op5->getValue() == "Hello world");
+  assert(op5->getType() == Expr::Type::String);
   cout << "    OK\n";
 }
 

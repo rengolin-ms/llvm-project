@@ -27,39 +27,39 @@ namespace AST {
 /// for now and deleting the pointers on exit.
 struct Token {
   using Ptr = std::unique_ptr<Token>;
-  Token(std::string str) : value(str) {}
-  Token() {}
+  Token(std::string str) : isValue(true), value(str) {}
+  Token() : isValue(false) {}
 
   void addChild(Token::Ptr tok) {
-    assert(!isValue() && "Can't add children to values");
+    assert(!isValue && "Can't add children to values");
     children.push_back(std::move(tok));
   }
   llvm::ArrayRef<Ptr> getChildren() const {
-    assert(!isValue() && "No children in a value token");
+    assert(!isValue && "No children in a value token");
     return children;
   }
   llvm::StringRef getValue() const {
-    assert(isValue() && "Not a value token");
+    assert(isValue && "Not a value token");
     return value;
   }
   const Token *getChild(size_t idx) const {
-    assert(!isValue() && "No children in a value token");
+    assert(!isValue && "No children in a value token");
     assert(idx < children.size() && "Offset error");
     return children[idx].get();
   }
 
   const Token *getHead() const {
-    assert(!isValue() && "No children in a value token");
+    assert(!isValue && "No children in a value token");
     assert(children.size() > 0 && "No head");
     return children[0].get();
   }
   llvm::ArrayRef<Ptr> getTail() const {
-    assert(!isValue() && "No children in a value token");
+    assert(!isValue && "No children in a value token");
     assert(children.size() > 1 && "No tail");
     return llvm::ArrayRef<Ptr>(children).slice(1);
   }
 
-  bool isValue() const { return !value.empty(); }
+  const bool isValue;
   size_t size() const { return children.size(); }
 
   void dump(size_t tab = 0) const;

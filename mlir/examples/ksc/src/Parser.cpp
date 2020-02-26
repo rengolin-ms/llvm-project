@@ -90,6 +90,7 @@ static bool isLiteralOrType(llvm::StringRef str) {
 // Lex a token out, recurse if another entry point is found
 size_t Lexer::lexToken(Token *tok, size_t pos) {
   size_t tokenStart = pos;
+  bool isInString = false;
   while (pos < len) {
     switch (code[pos]) {
       case ';':
@@ -98,6 +99,11 @@ size_t Lexer::lexToken(Token *tok, size_t pos) {
           tokenStart = ++pos;
         break;
       case ' ':
+        // Spaces are allowed inside strings
+        if (isInString) {
+          pos++;
+          break;
+        }
         // Maybe end of a value
         if (tokenStart != pos) {
           tok->addChild(
@@ -122,6 +128,17 @@ size_t Lexer::lexToken(Token *tok, size_t pos) {
         tok->addChild(move(t));
         break;
       }
+      case '"':
+        if (isInString) {
+          // Strings need to capture the quotes, too
+          size_t start = tokenStart - 1;
+          size_t length = (pos - start + 1);
+          tok->addChild(
+              make_unique<Token>(code.substr(start, length)));
+        }
+        tokenStart = ++pos;
+        isInString = !isInString;
+        break;
       case '\n':
       case '\r':
         // Ignore
@@ -141,7 +158,7 @@ size_t Lexer::lexToken(Token *tok, size_t pos) {
 Expr::Ptr Parser::parseToken(const Token *tok) {
   // Values are all strings (numbers will be converted later)
   // They could be variable use, type names, literals
-  if (tok->isValue())
+  if (tok->isValue)
     return parseValue(tok);
 
   // Empty block
@@ -149,7 +166,7 @@ Expr::Ptr Parser::parseToken(const Token *tok) {
     return unique_ptr<Expr>(new Block());
 
   // If the first expr is not a value, this is a block of blocks
-  if (!tok->getHead()->isValue())
+  if (!tok->getHead()->isValue)
     return parseBlock(tok);
 
   // First child is a value, can be all sorts of block types
@@ -199,7 +216,7 @@ Expr::Ptr Parser::parseBlock(const Token *tok) {
 
 // Values (variable names, literals, type names)
 Expr::Ptr Parser::parseValue(const Token *tok) {
-  assert(tok->isValue());
+  assert(tok->isValue);
   string value = tok->getValue().str();
 
   // Type names: Integer, Float, Bool, String...
@@ -210,6 +227,9 @@ Expr::Ptr Parser::parseValue(const Token *tok) {
   // Literals: 10.0 42 "Hello" (not hello, that's a variable use)
   ty = LiteralType(value);
   if (ty != Expr::Type::None) {
+    // Trim quotes "" from strings before creating constant
+    if (ty == Expr::Type::String)
+      value = value.substr(1, value.length()-2);
     return unique_ptr<Expr>(new Literal(value, ty));
   }
   // Variable use: name (without quotes)
@@ -243,8 +263,8 @@ Expr::Ptr Parser::parseCall(const Token *tok) {
 
 // Operations (op arg1 arg2 ...), retTy = argnTy
 Expr::Ptr Parser::parseOperation(const Token *tok) {
-  assert(!tok->isValue() && tok->size() > 1);
-  assert(tok->getHead()->isValue());
+  assert(!tok->isValue && tok->size() > 1);
+  assert(tok->getHead()->isValue);
   llvm::StringRef op = tok->getHead()->getValue();
 
   // Get all operands to validate type
@@ -297,7 +317,7 @@ Expr::Ptr Parser::parseLet(const Token *tok) {
   assert(tok->size() == 3);
   const Token *bond = tok->getChild(1);
   const Token *expr = tok->getChild(2);
-  assert(!bond->isValue() && bond->size() == 2);
+  assert(!bond->isValue && bond->size() == 2);
   auto var = parseVariable(bond);
   auto body = parseToken(expr);
   return make_unique<Let>(move(var), move(body));
@@ -309,13 +329,13 @@ Expr::Ptr Parser::parseDecl(const Token *tok) {
   const Token *name = tok->getChild(1);
   const Token *type = tok->getChild(2);
   const Token *args = tok->getChild(3);
-  assert(name->isValue() && type->isValue());
-  assert(!args->isValue());
+  assert(name->isValue && type->isValue);
+  assert(!args->isValue);
 
   auto decl =
       make_unique<Declaration>(name->getValue(), Str2Type(type->getValue()));
   assert(decl);
-  assert(!args->isValue());
+  assert(!args->isValue);
   for (auto &c : args->getChildren())
     decl->addArgType(Str2Type(c->getValue()));
   functions.add(name->getValue().str(), decl.get());
@@ -330,7 +350,7 @@ Expr::Ptr Parser::parseDef(const Token *tok) {
   const Token *type = tok->getChild(2);
   const Token *args = tok->getChild(3);
   const Token *expr = tok->getChild(4);
-  assert(name->isValue() && type->isValue() && !args->isValue());
+  assert(name->isValue && type->isValue && !args->isValue);
   vector<Expr::Ptr> arguments;
   for (auto &a : args->getChildren())
     arguments.push_back(parseToken(a.get()));
@@ -345,7 +365,7 @@ Expr::Ptr Parser::parseDef(const Token *tok) {
   auto node = make_unique<Definition>(name->getValue(),
                                       Str2Type(type->getValue()), move(body));
   assert(node);
-  assert(!args->isValue());
+  assert(!args->isValue);
   for (auto &arg : arguments)
     node->addArgument(move(arg));
   functions.add(name->getValue().str(), node->getProto());
@@ -359,7 +379,7 @@ Expr::Ptr Parser::parseCond(const Token *tok) {
   const Token *cond = tok->getChild(1);
   const Token *ifBlock = tok->getChild(2);
   const Token *elseBlock = tok->getChild(3);
-  assert(!cond->isValue() && !ifBlock->isValue() && !elseBlock->isValue());
+  assert(!cond->isValue && !ifBlock->isValue && !elseBlock->isValue);
   auto c = parseToken(cond);
   auto i = parseToken(ifBlock);
   auto e = parseToken(elseBlock);
@@ -369,7 +389,7 @@ Expr::Ptr Parser::parseCond(const Token *tok) {
 //================================================ Dumps tokens, nodes to stdout
 
 void Token::dump(size_t tab) const {
-  if (isValue()) {
+  if (isValue) {
     cout << string(tab, ' ') << "tok(" << getValue().data() << ")\n";
     return;
   }
