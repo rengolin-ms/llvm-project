@@ -330,8 +330,7 @@ Expr::Ptr Parser::parseDef(const Token *tok) {
   const Token *type = tok->getChild(2);
   const Token *args = tok->getChild(3);
   const Token *expr = tok->getChild(4);
-  assert(name->isValue() && type->isValue());
-  assert(!args->isValue() && !expr->isValue());
+  assert(name->isValue() && type->isValue() && !args->isValue());
   vector<Expr::Ptr> arguments;
   for (auto &a : args->getChildren())
     arguments.push_back(parseToken(a.get()));
