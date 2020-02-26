@@ -385,13 +385,20 @@ Expr::Ptr Parser::parseDef(const Token *tok) {
 // Conditional: (if (cond) (true block) (false block))
 Expr::Ptr Parser::parseCond(const Token *tok) {
   assert(tok->size() == 4);
-  const Token *cond = tok->getChild(1);
-  const Token *ifBlock = tok->getChild(2);
-  const Token *elseBlock = tok->getChild(3);
-  assert(!cond->isValue && !ifBlock->isValue && !elseBlock->isValue);
-  auto c = parseToken(cond);
-  auto i = parseToken(ifBlock);
-  auto e = parseToken(elseBlock);
+  auto c = parseToken(tok->getChild(1));
+  auto i = parseToken(tok->getChild(2));
+  auto e = parseToken(tok->getChild(3));
+
+  // LLVM doesn't support constant conditions, so we only emit the if/else block
+  auto lit = llvm::dyn_cast<Literal>(c.get());
+  if (lit) {
+    if (lit->getValue() == "true")
+      return i;
+    else
+      return e;
+  }
+
+  // Non-literal conditions split in diamond pattern
   return make_unique<Condition>(move(c), move(i), move(e));
 }
 
