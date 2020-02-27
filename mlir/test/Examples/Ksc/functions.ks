@@ -71,6 +71,36 @@
 ; LLVM-NEXT:    ret i64 %2
 ; LLVM-NEXT:  }
 
+; Single variable can be bare
+(def baz Integer (z : Integer) (add@ii z 50))
+; AST:       Definition:
+; AST-NEXT:    name [baz]
+; AST-NEXT:    type [Integer]
+; AST-NEXT:    Arguments:
+; AST-NEXT:      Variable:
+; AST-NEXT:        name [z]
+; AST-NEXT:        type [Integer]
+; AST-NEXT:    Implementation:
+; AST-NEXT:      Block:
+; AST-NEXT:        Operation:
+; AST-NEXT:          name [add@ii]
+; AST-NEXT:          type [Integer]
+; AST-NEXT:          Variable:
+; AST-NEXT:            name [z]
+; AST-NEXT:            type [Integer]
+; AST-NEXT:          Literal:
+; AST-NEXT:            value [50]
+; AST-NEXT:            type [Integer]
+; MLIR:       func @baz(%arg0: i64) -> i64 {
+; MLIR-NEXT:    %c50_i64 = constant 50 : i64
+; MLIR-NEXT:    %0 = addi %arg0, %c50_i64 : i64
+; MLIR-NEXT:    return %0 : i64
+; MLIR-NEXT:  }
+; LLVM:       define i64 @baz(i64 %0) {
+; LLVM-NEXT:    %2 = add i64 %0, 50
+; LLVM-NEXT:    ret i64 %2
+; LLVM-NEXT:  }
+
 ; Main, testing calls to functions
 (def main Integer () (
 ; AST:       Definition:
