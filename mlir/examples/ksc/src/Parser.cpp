@@ -85,6 +85,13 @@ static bool isLiteralOrType(llvm::StringRef str) {
          LiteralType(str) != Expr::Type::None;
 }
 
+static llvm::StringRef unquote(llvm::StringRef original) {
+  size_t start = 0, len = original.size();
+  if (original.front() == '"') { start++; len--; }
+  if (original.back() == '"') len--;
+  return original.substr(start, len);
+}
+
 //================================================ Lex source into Tokens
 
 // Lex a token out, recurse if another entry point is found
@@ -183,6 +190,8 @@ Expr::Ptr Parser::parseToken(const Token *tok) {
       return parseDef(tok);
     } else if (value == "if") {
       return parseCond(tok);
+    } else if (value == "rule") {
+      return parseRule(tok);
     }
     // TODO: implement fold, lambda, tuple, apply
     assert(0 && "Not implemented yet");
@@ -386,6 +395,21 @@ Expr::Ptr Parser::parseCond(const Token *tok) {
   return make_unique<Condition>(move(c), move(i), move(e));
 }
 
+// Rule: (rule "mul2" (v : Float) (mul@ff v 2.0) (add v v))
+Expr::Ptr Parser::parseRule(const Token *tok) {
+  assert(tok->size() == 5);
+  const Token *name = tok->getChild(1);
+  assert(name->isValue);
+  llvm::StringRef unquoted = unquote(name->getValue());
+  auto var = parseToken(tok->getChild(2));
+  auto pat = parseToken(tok->getChild(3));
+  auto res = parseToken(tok->getChild(4));
+  auto rule =
+      make_unique<Rule>(unquoted, move(var), move(pat), move(res));
+  rules.add(unquoted.str(), rule.get());
+  return rule;
+}
+
 //================================================ Dumps tokens, nodes to stdout
 
 void Token::dump(size_t tab) const {
@@ -475,4 +499,17 @@ void Condition::dump(size_t tab) const {
   ifBlock->dump(tab + 4);
   cout << string(tab + 2, ' ') << "False branch:" << endl;
   elseBlock->dump(tab + 4);
+}
+
+void Rule::dump(size_t tab) const {
+  cout << string(tab, ' ') << "Rule:" << endl;
+  cout << string(tab + 2, ' ') << "name [" << name << "]"
+       << endl;
+  Expr::dump(tab + 2);
+  cout << string(tab + 2, ' ') << "Variable:" << endl;
+  variable->dump(tab + 4);
+  cout << string(tab + 2, ' ') << "Pattern:" << endl;
+  pattern->dump(tab + 4);
+  cout << string(tab + 2, ' ') << "Result:" << endl;
+  result->dump(tab + 4);
 }

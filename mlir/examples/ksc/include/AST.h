@@ -37,6 +37,7 @@ struct Expr {
     Definition,
     Condition,
     Operation,
+    Rule,
     /// Unused below (TODO: Implement those)
     Fold,
     Lambda,
@@ -339,6 +340,37 @@ private:
   Expr::Ptr cond;
   Expr::Ptr ifBlock;
   Expr::Ptr elseBlock;
+};
+
+/// Rule, ex: (rule "mul2" (v : Float) (mul@ff v 2.0) (add v v))
+///
+/// Rules express ways to transform the graph. They need a special
+/// MLIR dialect to be represented and cannot be lowered to LLVM.
+struct Rule : public Expr {
+  using Ptr = std::unique_ptr<Condition>;
+  Rule(llvm::StringRef name, Expr::Ptr variable, Expr::Ptr pattern,
+       Expr::Ptr result)
+      : Expr(Expr::Type::None, Expr::Kind::Rule), name(name),
+        variable(std::move(variable)), pattern(std::move(pattern)),
+        result(std::move(result)) {}
+
+  llvm::StringRef getName() const { return name; }
+  Expr *getExpr() const { return variable.get(); }
+  Expr *getPattern() const { return pattern.get(); }
+  Expr *getResult() const { return result.get(); }
+
+  void dump(size_t tab = 0) const override;
+
+  /// LLVM RTTI
+  static bool classof(const Expr *c) {
+    return c->kind == Expr::Kind::Rule;
+  }
+
+private:
+  std::string name;
+  Expr::Ptr variable;
+  Expr::Ptr pattern;
+  Expr::Ptr result;
 };
 
 } // namespace AST

@@ -81,7 +81,7 @@ class Lexer {
   size_t lexToken(Token *tok, size_t pos);
 
 public:
-  Lexer(llvm::StringRef code)
+  Lexer(std::string &&code)
       : code(code), len(code.size()), root(new Token()) {
     assert(len > 0 && "Empty code?");
   }
@@ -112,7 +112,7 @@ class Parser {
     return reservedOps.find(name) != reservedOps.end();
   }
   const std::set<std::string > reservedWords{
-      "let", "edef", "def", "if"
+      "let", "edef", "def", "if", "rule"
   };
   bool isReservedWord(std::string name) const {
     return reservedWords.find(name) != reservedWords.end();
@@ -135,6 +135,7 @@ class Parser {
   };
   Symbols functions;
   Symbols variables;
+  Symbols rules;
 
   // Build AST nodes from Tokens
   Expr::Ptr parseToken(const Token *tok);
@@ -148,6 +149,7 @@ class Parser {
   Expr::Ptr parseDecl(const Token *tok);
   Expr::Ptr parseDef(const Token *tok);
   Expr::Ptr parseCond(const Token *tok);
+  Expr::Ptr parseRule(const Token *tok);
 
 public:
   Parser(std::string code) : lex(std::move(code)) { }
