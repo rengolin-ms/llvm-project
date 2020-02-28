@@ -160,17 +160,19 @@ private:
 struct Variable : public Expr {
   using Ptr = std::unique_ptr<Variable>;
   /// Definition: (x 10) in ( let (x 10) (expr) )
-  Variable(llvm::StringRef name, Expr::Type type, Expr::Ptr init)
-      : Expr(type, Expr::Kind::Variable), name(name), init(std::move(init)) {
-    if (this->init)
-      assert(this->init->getType() == type && "Variable type mismatch");
-  }
   /// Declaration: (x : Integer) in ( def name Type (x : Integer) (expr) )
-  Variable(llvm::StringRef name, Expr::Type type)
-      : Expr(type, Expr::Kind::Variable), name(name), init(nullptr) {
-    assert(isValidType() && "Invalid variable type");
-  }
+  /// We need to bind first, then assign to allow nested lets
+  Variable(llvm::StringRef name, Expr::Type type=Expr::Type::None)
+      : Expr(type, Expr::Kind::Variable), name(name), init(nullptr) {}
 
+  void setInit(Expr::Ptr &&expr) {
+    assert(!init);
+    init = std::move(expr);
+    if (type != Expr::Type::None)
+      assert(type == init->getType());
+    else
+      type = init->getType();
+  }
   /// No value == nullptr
   Expr *getInit() const { return init.get(); }
   llvm::StringRef getName() const { return name; }

@@ -302,18 +302,19 @@ Expr::Ptr Parser::parseVariable(const Token *tok) {
     assert(type != Expr::Type::None);
     auto var = unique_ptr<Variable>(new Variable(value, type));
     variables.add(value, var.get());
-    assert(variables.exists(value));
     return var;
   }
 
   // Variable definition: (name value) : check name on SymbolTable
   // TODO: This is naive, we need to check context, too
   if (tok->size() == 2) {
-    Expr::Ptr expr = parseToken(children[1].get());
-    auto type = expr->getType();
-    auto var = unique_ptr<Variable>(new Variable(value, type, move(expr)));
+    // Add to map fist, to allow recursion
+    auto var = unique_ptr<Variable>(new Variable(value));
     variables.add(value, var.get());
-    assert(variables.exists(value));
+    Expr::Ptr expr = parseToken(children[1].get());
+    // After initialiser is parsed, set it directly on map
+    auto vptr = llvm::dyn_cast<Variable>(variables.get(value));
+    vptr->setInit(move(expr));
     return var;
   }
 
