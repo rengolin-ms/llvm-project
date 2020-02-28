@@ -6,30 +6,29 @@
 
 (rule "mul2" (v : Float) (mul@ff v 2.0) (add@ff v v))
 ; AST:  Rule:
-; AST:    name [mul2]
-; AST:    type [none]
-; AST:    Variable:
-; AST:      Variable:
-; AST:        name [v]
-; AST:        type [Float]
-; AST:    Pattern:
-; AST:      Operation:
-; AST:        name [mul@ff]
-; AST:        type [Float]
-; AST:        Variable:
-; AST:          name [v]
-; AST:          type [Float]
-; AST:        Literal:
-; AST:          value [2.0]
-; AST:          type [Float]
-; AST:    Result:
-; AST:      Operation:
-; AST:        name [add@ff]
-; AST:        type [Float]
-; AST:        Variable:
-; AST:          name [v]
-; AST:          type [Float]
-; AST:        Variable:
-; AST:          name [v]
-; AST:          type [Float]
-
+; AST-NEXT:    name [mul2]
+; AST-NEXT:    type [none]
+; AST-NEXT:    Variable:
+; AST-NEXT:      Variable:
+; AST-NEXT:        name [v]
+; AST-NEXT:        type [Float]
+; AST-NEXT:    Pattern:
+; AST-NEXT:      Operation:
+; AST-NEXT:        name [mul@ff]
+; AST-NEXT:        type [Float]
+; AST-NEXT:        Variable:
+; AST-NEXT:          name [v]
+; AST-NEXT:          type [Float]
+; AST-NEXT:        Literal:
+; AST-NEXT:          value [2.0]
+; AST-NEXT:          type [Float]
+; AST-NEXT:    Result:
+; AST-NEXT:      Operation:
+; AST-NEXT:        name [add@ff]
+; AST-NEXT:        type [Float]
+; AST-NEXT:        Variable:
+; AST-NEXT:          name [v]
+; AST-NEXT:          type [Float]
+; AST-NEXT:        Variable:
+; AST-NEXT:          name [v]
+; AST-NEXT:          type [Float]

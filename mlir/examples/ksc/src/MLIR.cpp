@@ -309,11 +309,13 @@ const mlir::ModuleOp Generator::build(const std::string& mlir) {
 unique_ptr<llvm::Module> Generator::emitLLVM() {
   // The lowering pass manager
   mlir::PassManager pm(&context);
-  pm.addPass(mlir::createInlinerPass());
-  pm.addPass(mlir::createSymbolDCEPass());
-  mlir::OpPassManager &optPM = pm.nest<mlir::FuncOp>();
-  optPM.addPass(mlir::createCanonicalizerPass());
-  optPM.addPass(mlir::createCSEPass());
+  if (optimise > 0) {
+    pm.addPass(mlir::createInlinerPass());
+    pm.addPass(mlir::createSymbolDCEPass());
+    mlir::OpPassManager &optPM = pm.nest<mlir::FuncOp>();
+    optPM.addPass(mlir::createCanonicalizerPass());
+    optPM.addPass(mlir::createCSEPass());
+  }
   pm.addPass(mlir::createLowerToLLVMPass());
 
   // First lower to LLVM dialect

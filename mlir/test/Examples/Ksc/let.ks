@@ -41,11 +41,10 @@
 ; AST-NEXT:      name [x]
 ; AST-NEXT:      type [Integer]
 ; MLIR generation folds the variable if constant
-; MLIR: %c10_i64 = constant 10 : i64
-; LLVM optimises it away
+; MLIR: %c10{{.*}} = constant 10 : i64
+; LLVM optimises constants away
 
-
-; Call a function with y, return the value
+; Call an operation with y, return the value
 (let (y 20) (add@ii y 30))
 ; AST:       Let:
 ; AST-NEXT:    type [Integer]
@@ -65,10 +64,10 @@
 ; AST-NEXT:        value [30]
 ; AST-NEXT:        type [Integer]
 ; MLIR generation folds the variable if constant
-; MLIR:      %c20_i64 = constant 20 : i64
-; MLIR-NEXT: %c30_i64 = constant 30 : i64
-; MLIR-NEXT: %0 = addi %c20_i64, %c30_i64 : i64
-; LLVM optimises it away
+; MLIR:      %c20{{.*}} = constant 20 : i64
+; MLIR-NEXT: %c30{{.*}} = constant 30 : i64
+; MLIR-NEXT: %0 = addi %c20{{.*}}, %c30{{.*}} : i64
+; LLVM optimises constants away
 
 ; Return the value of z, expanded from a function call
 (let (z (fun 10)) z)
@@ -87,9 +86,9 @@
 ; AST-NEXT:      name [z]
 ; AST-NEXT:      type [Integer]
 ; MLIR generation creates SSA value if not constant
-; MLIR:       %c10_i64_0 = constant 10 : i64
-; MLIR-NEXT:  %1 = call @fun(%c10_i64_0) : (i64) -> i64
-; LLVM:       %2 = call i64 @fun(i64 10)
+; MLIR:       %c10{{.*}} = constant 10 : i64
+; MLIR-NEXT:  call @fun(%c10{{.*}}) : (i64) -> i64
+; LLVM:       call i64 @fun(i64 10)
 
 ; Nested lets (ex1)
 (let (l1 (mul@ii argc argc))
@@ -107,8 +106,8 @@
 ; AST-NEXT:        Variable:
 ; AST-NEXT:          name [argc]
 ; AST-NEXT:          type [Integer]
-; MLIR-NEXT:  %2 = muli %arg0, %arg0 : i64
-; LLVM optimises it away
+; MLIR-NEXT:  %[[mul:[0-9]+]] = muli %arg0, %arg0 : i64
+; LLVM-NEXT:  %[[mul:[0-9]+]] = mul i64 %0, %0
 
      (let (l2 (add@ii argc l1))
 ; AST-NEXT:    Let:
@@ -125,8 +124,8 @@
 ; AST-NEXT:          Variable:
 ; AST-NEXT:            name [l1]
 ; AST-NEXT:            type [Integer]
-; MLIR-NEXT:  %3 = addi %arg0, %2 : i64
-; LLVM optimises it away
+; MLIR-NEXT:  %[[add:[0-9]+]] = addi %arg0, %[[mul]] : i64
+; LLVM-NEXT:  %[[add:[0-9]+]] = add i64 %0, %[[mul]]
 
           (mul@ii l1 l2)))
 ; AST-NEXT:      Operation:
@@ -138,8 +137,8 @@
 ; AST-NEXT:        Variable:
 ; AST-NEXT:          name [l2]
 ; AST-NEXT:          type [Integer]
-; MLIR-NEXT:  %4 = muli %2, %3 : i64
-; LLVM optimises it away
+; MLIR-NEXT:  muli %[[mul]], %[[add]] : i64
+; LLVM-NEXT:  mul i64 %[[mul]], %[[add]]
 
 ; Multiple bind lets (ex2)
 (let ((i argc) (j 20) (k 30)) (add@ii (mul@ii i j) k))
@@ -178,14 +177,14 @@
 ; AST-NEXT:      Variable:
 ; AST-NEXT:        name [k]
 ; AST-NEXT:        type [Integer]
-; MLIR-NEXT:  %c20_i64_1 = constant 20 : i64
-; MLIR-NEXT:  %c30_i64_2 = constant 30 : i64
-; MLIR-NEXT:  %5 = muli %arg0, %c20_i64_1 : i64
-; MLIR-NEXT:  %6 = addi %5, %c30_i64_2 : i64
-; LLVM-NEXT:  %3 = mul i64 %0, 20
-; LLVM-NEXT:  %4 = add i64 %3, 30
+; MLIR-NEXT:  %c20{{.*}} = constant 20 : i64
+; MLIR-NEXT:  %c30{{.*}} = constant 30 : i64
+; MLIR-NEXT:  %[[ij:[0-9]+]] = muli %arg0, %c20{{.*}} : i64
+; MLIR-NEXT:  %[[ret:[0-9]+]] = addi %[[ij]], %c30{{.*}} : i64
+; LLVM-NEXT:  %[[ij:[0-9]+]] = mul i64 %0, 20
+; LLVM-NEXT:  %[[ret:[0-9]+]] = add i64 %[[ij]], 30
 
 ))
 ; AST does not return anything
-; MLIR: return %6 : i64
-; LLVM: ret i64 %4
+; MLIR: return %[[ret]] : i64
+; LLVM: ret i64 %[[ret]]

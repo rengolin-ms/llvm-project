@@ -52,14 +52,14 @@
 ; AST-NEXT:           Literal:
 ; AST-NEXT:             value [10]
 ; AST-NEXT:             type [Integer]
-; MLIR: %cst = constant 1.500000e+00 : f64
-; MLIR: %0 = mulf %arg1, %cst : f64
-; MLIR: %c10_i64 = constant 10 : i64
-; MLIR: %1 = addi %arg0, %c10_i64 : i64
-; MLIR: return %1 : i64
-; LLVM output omits the mulf because it has no users
-; LLVM:   %3 = add i64 %0, 10
-; LLVM:   ret i64 %3
+; MLIR-NEXT:  %cst = constant 1.500000e+00 : f64
+; MLIR-NEXT:  %{{.*}} = mulf %arg1, %cst : f64
+; MLIR-NEXT:  %c10{{.*}} = constant 10 : i64
+; MLIR-NEXT:  %[[add:[0-9]+]] = addi %arg0, %c10{{.*}} : i64
+; MLIR-NEXT:  return %[[add]] : i64
+; LLVM-NEXT:  %{{.*}} = fmul double %1, 1.500000e+00
+; LLVM-NEXT:  [[add:[0-9]+]] = add i64 %0, 10
+; LLVM-NEXT:  ret i64 %[[add]]
 
 
 (def main Integer () (fun 42 10.0) ; comment
@@ -78,13 +78,11 @@
 ; AST-NEXT:           Literal:
 ; AST-NEXT:             value [10.0]
 ; AST-NEXT:             type [Float]
-; MLIR:  func @main() -> i64 {
-; MLIR:    %c42_i64 = constant 42 : i64
-; MLIR:    %cst = constant 1.000000e+01 : f64
-; MLIR:    %0 = call @fun(%c42_i64, %cst) : (i64, f64) -> i64
-; MLIR:    return %0 : i64
-; MLIR:  }
-; LLVM optimiser inlines the call and constant folds the result
-; LLVM: define i64 @main() {
-; LLVM:   ret i64 52
-; LLVM: }
+; MLIR:       func @main() -> i64 {
+; MLIR-NEXT:    %c42{{.*}} = constant 42 : i64
+; MLIR-NEXT:    %cst = constant 1.000000e+01 : f64
+; MLIR-NEXT:    %[[fun:[0-9]+]] = call @fun(%c42{{.*}}, %cst) : (i64, f64) -> i64
+; MLIR-NEXT:    return %[[fun]] : i64
+; LLVM:       define i64 @main() {
+; LLVM-NEXT:    %[[fun:[0-9]+]] = call i64 @fun(i64 42, double 1.000000e+01)
+; LLVM-NEXT:    ret i64 %[[fun]]

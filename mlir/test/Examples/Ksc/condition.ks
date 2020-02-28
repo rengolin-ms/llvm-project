@@ -1,6 +1,6 @@
 ; RUN: ksc-mlir AST %s | FileCheck %s --check-prefix=AST
 ; RUN: ksc-mlir MLIR %s 2>&1 | FileCheck %s --check-prefix=MLIR
-; R-UN: ksc-mlir LLVM %s 2>&1 | FileCheck %s --check-prefix=LLVM
+; RUN: ksc-mlir LLVM %s 2>&1 | FileCheck %s --check-prefix=LLVM
 
 ; TODO: Implement unary comparison operations
 
@@ -23,24 +23,24 @@
 ; MLIR:      func @main() -> i64 {
 ; LLVM:      define i64 @main() {
 
-  ; All literals, LLVM does not support, so we only lower the right block
+; All literals, LLVM does not support, so we only lower the right block
   (if true 10 20)
 ; AST-NOT:   Condition:
 ; AST-NEXT:    Literal:
 ; AST-NEXT:      value [10]
 ; AST-NEXT:      type [Integer]
-; MLIR-NEXT:    %c10_i64 = constant 10 : i64
-; LLVM optimises this away
+; MLIR-NEXT:    %c10{{.*}} = constant 10 : i64
+; LLVM optimises constants away
 
   (if false 10 20)
 ; AST-NOT:   Condition:
 ; AST-NEXT:    Literal:
 ; AST-NEXT:      value [20]
 ; AST-NEXT:      type [Integer]
-; MLIR-NEXT:    %c20_i64 = constant 20 : i64
-; LLVM optimises this away
+; MLIR-NEXT:    %c20{{.*}} = constant 20 : i64
+; LLVM optimises constants away
 
-  ; All expressions
+; All constant expressions
   (if (eq 10 20) (foo 30) (bar 40))
 ; AST:       Condition:
 ; AST-NEXT:    Operation:
@@ -66,35 +66,34 @@
 ; AST-NEXT:        Literal:
 ; AST-NEXT:          value [40]
 ; AST-NEXT:          type [Integer]
-; MLIR-NEXT:    %c10_i64_0 = constant 10 : i64
-; MLIR-NEXT:    %c20_i64_1 = constant 20 : i64
-; MLIR-NEXT:    %0 = call @eq(%c10_i64_0, %c20_i64_1) : (i64, i64) -> i1
-; MLIR-NEXT:    cond_br %0, ^bb1, ^bb2
-; MLIR-NEXT:  ^bb1:	// pred: ^bb0
-; MLIR-NEXT:    %c30_i64 = constant 30 : i64
-; MLIR-NEXT:    %1 = call @foo(%c30_i64) : (i64) -> i64
-; MLIR-NEXT:    br ^bb3(%1 : i64)
-; MLIR-NEXT:  ^bb2:	// pred: ^bb0
-; MLIR-NEXT:    %c40_i64 = constant 40 : i64
-; MLIR-NEXT:    %2 = call @bar(%c40_i64) : (i64) -> i64
-; MLIR-NEXT:    br ^bb3(%2 : i64)
-; MLIR-NEXT:  ^bb3(%3: i64):	// 2 preds: ^bb1, ^bb2
-; LLVM:  %1 = call i1 @eq(i64 10, i64 20)
-; LLVM:  br i1 %1, label %2, label %4
-; LLVM:
-; LLVM:2:                                                ; preds = %0
-; LLVM:  %3 = call i64 @foo(i64 30)
-; LLVM:  br label %6
-; LLVM:
-; LLVM:4:                                                ; preds = %0
-; LLVM:  %5 = call i64 @bar(i64 40)
-; LLVM:  br label %6
-; LLVM:
-; LLVM:6:                                                ; preds = %4, %2
+
+; MLIR-NEXT:    %c10{{.*}} = constant 10 : i64
+; MLIR-NEXT:    %c20{{.*}} = constant 20 : i64
+; MLIR-NEXT:    %[[eq:[0-9]+]] = call @eq(%c10{{.*}}, %c20{{.*}}) : (i64, i64) -> i1
+; MLIR-NEXT:    cond_br %[[eq]], ^[[if:bb[0-9]+]], ^[[else:bb[0-9]+]]
+; MLIR-NEXT:  ^[[if]]:
+; MLIR-NEXT:    %c30{{.*}} = constant 30 : i64
+; MLIR-NEXT:    %[[foo:[0-9]+]] = call @foo(%c30{{.*}}) : (i64) -> i64
+; MLIR-NEXT:    br ^[[latch:bb[0-9]+]](%[[foo]] : i64)
+; MLIR-NEXT:  ^[[else]]:
+; MLIR-NEXT:    %c40{{.*}} = constant 40 : i64
+; MLIR-NEXT:    %[[bar:[0-9]+]] = call @bar(%c40{{.*}}) : (i64) -> i64
+; MLIR-NEXT:    br ^[[latch]](%[[bar]] : i64)
+; MLIR-NEXT:  ^[[latch]](%[[last:[0-9]+]]: i64):
+
+; LLVM-NEXT:    %[[eq:[0-9]+]] = call i1 @eq(i64 10, i64 20)
+; LLVM-NEXT:    br i1 %[[eq]], label %[[if:[0-9]+]], label %[[else:[0-9]+]]
+; LLVM:       [[if]]:
+; LLVM-NEXT:    %[[foo:[0-9]+]] = call i64 @foo(i64 30)
+; LLVM-NEXT:    br label %[[latch:[0-9]+]]
+; LLVM:       [[else]]:
+; LLVM-NEXT:    %[[bar:[0-9]+]] = call i64 @bar(i64 40)
+; LLVM-NEXT:    br label %[[latch]]
+; LLVM:       [[latch]]:
+; LLVM-NEXT:    %[[last:[0-9]+]] = phi i64 [ %[[foo]], %[[if]] ], [ %[[bar]], %[[else]] ]
 
 
-
-  ; Inside let, with variables
+; Inside let, with variables
   (let (x (foo 50)) (if (eq x 60) (foo 70) (bar 80)))
 ; AST:       Condition:
 ; AST-NEXT:    Operation:
@@ -120,37 +119,36 @@
 ; AST-NEXT:        Literal:
 ; AST-NEXT:          value [80]
 ; AST-NEXT:          type [Integer]
-; MLIR-NEXT:    %c50_i64 = constant 50 : i64
-; MLIR-NEXT:    %4 = call @foo(%c50_i64) : (i64) -> i64
-; MLIR-NEXT:    %c60_i64 = constant 60 : i64
-; MLIR-NEXT:    %5 = call @eq(%4, %c60_i64) : (i64, i64) -> i1
-; MLIR-NEXT:    cond_br %5, ^bb4, ^bb5
-; MLIR-NEXT:  ^bb4:	// pred: ^bb3
-; MLIR-NEXT:    %c70_i64 = constant 70 : i64
-; MLIR-NEXT:    %6 = call @foo(%c70_i64) : (i64) -> i64
-; MLIR-NEXT:    br ^bb6(%6 : i64)
-; MLIR-NEXT:  ^bb5:	// pred: ^bb3
-; MLIR-NEXT:    %c80_i64 = constant 80 : i64
-; MLIR-NEXT:    %7 = call @bar(%c80_i64) : (i64) -> i64
-; MLIR-NEXT:    br ^bb6(%7 : i64)
-; MLIR-NEXT:  ^bb6(%8: i64):	// 2 preds: ^bb4, ^bb5
-; LLVM:  %7 = call i64 @foo(i64 50)
-; LLVM:  %8 = call i1 @eq(i64 %7, i64 60)
-; LLVM:  br i1 %8, label %9, label %11
-; LLVM:
-; LLVM:9:                                                ; preds = %6
-; LLVM:  %10 = call i64 @foo(i64 70)
-; LLVM:  br label %13
-; LLVM:
-; LLVM:11:                                               ; preds = %6
-; LLVM:  %12 = call i64 @bar(i64 80)
-; LLVM:  br label %13
-; LLVM:
-; LLVM:13:                                               ; preds = %11, %9
-; LLVM:  %14 = phi i64 [ %10, %9 ], [ %12, %11 ]
+
+; MLIR-NEXT:    %c50{{.*}} = constant 50 : i64
+; MLIR-NEXT:    %[[fooeq:[0-9]+]] = call @foo(%c50{{.*}}) : (i64) -> i64
+; MLIR-NEXT:    %c60{{.*}} = constant 60 : i64
+; MLIR-NEXT:    %[[eq:[0-9]+]] = call @eq(%[[fooeq]], %c60{{.*}}) : (i64, i64) -> i1
+; MLIR-NEXT:    cond_br %[[eq]], ^[[if:bb[0-9]+]], ^[[else:bb[0-9]+]]
+; MLIR-NEXT:  ^[[if]]:
+; MLIR-NEXT:    %c70{{.*}} = constant 70 : i64
+; MLIR-NEXT:    %[[foo:[0-9]+]] = call @foo(%c70{{.*}}) : (i64) -> i64
+; MLIR-NEXT:    br ^[[latch:bb[0-9]+]](%[[foo]] : i64)
+; MLIR-NEXT:  ^[[else]]:
+; MLIR-NEXT:    %c80{{.*}} = constant 80 : i64
+; MLIR-NEXT:    %[[bar:[0-9]+]] = call @bar(%c80{{.*}}) : (i64) -> i64
+; MLIR-NEXT:    br ^[[latch]](%[[bar]] : i64)
+; MLIR-NEXT:  ^[[latch]](%[[last:[0-9]+]]: i64):
+
+; LLVM-NEXT:    %[[fooeq:[0-9]+]] = call i64 @foo(i64 50)
+; LLVM-NEXT:    %[[eq:[0-9]+]] = call i1 @eq(i64 %[[fooeq]], i64 60)
+; LLVM-NEXT:    br i1 %[[eq]], label %[[if:[0-9]+]], label %[[else:[0-9]+]]
+; LLVM:       [[if]]:
+; LLVM-NEXT:    %[[foo:[0-9]+]] = call i64 @foo(i64 70)
+; LLVM-NEXT:    br label %[[latch:[0-9]+]]
+; LLVM:       [[else]]:
+; LLVM-NEXT:    %[[bar:[0-9]+]] = call i64 @bar(i64 80)
+; LLVM-NEXT:    br label %[[latch]]
+; LLVM:       [[latch]]:
+; LLVM-NEXT:    %[[last:[0-9]+]] = phi i64 [ %[[foo]], %[[if]] ], [ %[[bar]], %[[else]] ]
 
 
 ))
 ; AST does not return anything
-; MLIR: return %8 : i64
-; LLVM: ret i64 %14
+; MLIR: return %[[last]] : i64
+; LLVM: ret i64 %[[last]]

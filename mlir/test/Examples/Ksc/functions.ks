@@ -62,13 +62,13 @@
 ; AST-NEXT:            value [40]
 ; AST-NEXT:            type [Integer]
 ; MLIR:       func @bar(%arg0: i64) -> i64 {
-; MLIR-NEXT:    %c40_i64 = constant 40 : i64
-; MLIR-NEXT:    %0 = addi %arg0, %c40_i64 : i64
-; MLIR-NEXT:    return %0 : i64
+; MLIR-NEXT:    %c40{{.*}} = constant 40 : i64
+; MLIR-NEXT:    %[[add:[0-9]+]] = addi %arg0, %c40{{.*}} : i64
+; MLIR-NEXT:    return %[[add]] : i64
 ; MLIR-NEXT:  }
 ; LLVM:       define i64 @bar(i64 %0) {
-; LLVM-NEXT:    %2 = add i64 %0, 40
-; LLVM-NEXT:    ret i64 %2
+; LLVM-NEXT:    %[[add:[0-9]+]] = add i64 %0, 40
+; LLVM-NEXT:    ret i64 %[[add]]
 ; LLVM-NEXT:  }
 
 ; Single variable can be bare
@@ -92,8 +92,8 @@
 ; AST-NEXT:            value [50]
 ; AST-NEXT:            type [Integer]
 ; MLIR:       func @baz(%arg0: i64) -> i64 {
-; MLIR-NEXT:    %c50_i64 = constant 50 : i64
-; MLIR-NEXT:    %0 = addi %arg0, %c50_i64 : i64
+; MLIR-NEXT:    %c50{{.*}} = constant 50 : i64
+; MLIR-NEXT:    %0 = addi %arg0, %c50{{.*}} : i64
 ; MLIR-NEXT:    return %0 : i64
 ; MLIR-NEXT:  }
 ; LLVM:       define i64 @baz(i64 %0) {
@@ -120,7 +120,8 @@
 ; AST-NEXT:      value [10.0]
 ; AST-NEXT:      type [Float]
 ; MLIR-NEXT:  %cst = constant 1.000000e+01 : f64
-; MLIR-NEXT:  %0 = call @foo(%cst) : (f64) -> f64
+; MLIR-NEXT:  call @foo(%cst) : (f64) -> f64
+; LLVM-NEXT:  call double @foo(double 1.000000e+01)
 
 (bar (fun 30))
 ; AST-NEXT:  Operation:
@@ -132,13 +133,13 @@
 ; AST-NEXT:      Literal:
 ; AST-NEXT:        value [30]
 ; AST-NEXT:        type [Integer]
-; MLIR-NEXT:  %c30_i64 = constant 30 : i64
-; MLIR-NEXT:  %1 = call @fun(%c30_i64) : (i64) -> i64
-; MLIR-NEXT:  %2 = call @bar(%1) : (i64) -> i64
-; LLVM-NEXT:  %1 = call i64 @fun(i64 30)
-; LLVM-NEXT:  %2 = add i64 %1, 40
+; MLIR-NEXT:  %c30{{.*}} = constant 30 : i64
+; MLIR-NEXT:  %[[fun:[0-9]+]] = call @fun(%c30{{.*}}) : (i64) -> i64
+; MLIR-NEXT:  %[[bar:[0-9]+]] = call @bar(%[[fun]]) : (i64) -> i64
+; LLVM-NEXT:  %[[fun:[0-9]+]] = call i64 @fun(i64 30)
+; LLVM-NEXT:  %[[bar:[0-9]+]] = call i64 @bar(i64 %[[fun]])
 
 ))
 ; AST does not return anything
-; MLIR: return %2 : i64
-; LLVM: ret i64 %2
+; MLIR: return %[[bar]] : i64
+; LLVM: ret i64 %[[bar]]

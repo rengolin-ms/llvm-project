@@ -23,6 +23,8 @@ namespace MLIR {
 
 // MLIR generator
 class Generator {
+  // TODO: Make this optional
+  const int optimise = 0;
   // The main module
   mlir::OwningModuleRef module;
   // The current builder
