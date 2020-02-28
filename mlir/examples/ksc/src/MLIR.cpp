@@ -235,7 +235,8 @@ mlir::Value Generator::buildOp(const AST::Operation* op) {
 mlir::Value Generator::buildLet(const AST::Let* let) {
   // Bind the variable to an expression
   // TODO: Use context
-  declareVariable(let->getVariable());
+  for (auto &v: let->getVariables())
+    declareVariable(llvm::dyn_cast<AST::Variable>(v.get()));
   // Lower the body, using the variable
   return buildNode(let->getExpr());
 }

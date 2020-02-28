@@ -143,7 +143,7 @@ void test_parser_let() {
   assert(def);
   // Let has two parts: variable definitions and expression
   assert(def->getType() == Expr::Type::Integer);
-  Variable* x = llvm::dyn_cast<Variable>(def->getVariable());
+  Variable* x = llvm::dyn_cast<Variable>(def->getVariable(0));
   assert(x->getType() == Expr::Type::Integer);
   Operation* expr = llvm::dyn_cast<Operation>(def->getExpr());
   assert(expr);

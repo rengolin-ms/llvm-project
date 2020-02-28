@@ -322,15 +322,24 @@ Expr::Ptr Parser::parseVariable(const Token *tok) {
 }
 
 // Sub-expr with contextual variables: (let (x 10) (add x 10))
-// TODO: can we bind more than one variable?
 Expr::Ptr Parser::parseLet(const Token *tok) {
   assert(tok->size() == 3);
   const Token *bond = tok->getChild(1);
   const Token *expr = tok->getChild(2);
-  assert(!bond->isValue && bond->size() == 2);
-  auto var = parseVariable(bond);
+  assert(!bond->isValue);
+  vector<Expr::Ptr> vars;
+  // Single variable binding
+  if (bond->getChild(0)->isValue) {
+    assert(bond->size() == 2);
+    vars.push_back(parseVariable(bond));
+  // Multiple variables
+  } else {
+    for (auto &c: bond->getChildren())
+      vars.push_back(parseVariable(c.get()));
+  }
+
   auto body = parseToken(expr);
-  return make_unique<Let>(move(var), move(body));
+  return make_unique<Let>(move(vars), move(body));
 }
 
 // Declares a function (and add it to symbol table)
@@ -471,7 +480,8 @@ void Variable::dump(size_t tab) const {
 void Let::dump(size_t tab) const {
   cout << string(tab, ' ') << "Let:" << endl;
   Expr::dump(tab + 2);
-  var->dump(tab + 2);
+  for (auto &v: vars)
+    v->dump(tab + 2);
   expr->dump(tab + 2);
 }
 

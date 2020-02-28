@@ -107,8 +107,8 @@
 ; AST-NEXT:        Variable:
 ; AST-NEXT:          name [argc]
 ; AST-NEXT:          type [Integer]
-; MLIR-NEXT:    %2 = muli %arg0, %arg0 : i64
-; LLVM-NEXT:  %3 = mul i64 %0, %0
+; MLIR-NEXT:  %2 = muli %arg0, %arg0 : i64
+; LLVM optimises it away
 
      (let (l2 (add@ii argc l1))
 ; AST-NEXT:    Let:
@@ -125,8 +125,8 @@
 ; AST-NEXT:          Variable:
 ; AST-NEXT:            name [l1]
 ; AST-NEXT:            type [Integer]
-; MLIR-NEXT:    %3 = addi %arg0, %2 : i64
-; LLVM-NEXT:  %4 = add i64 %0, %3
+; MLIR-NEXT:  %3 = addi %arg0, %2 : i64
+; LLVM optimises it away
 
           (mul@ii l1 l2)))
 ; AST-NEXT:      Operation:
@@ -138,10 +138,54 @@
 ; AST-NEXT:        Variable:
 ; AST-NEXT:          name [l2]
 ; AST-NEXT:          type [Integer]
-; MLIR-NEXT:    %4 = muli %2, %3 : i64
-; LLVM-NEXT:  %5 = mul i64 %3, %4
+; MLIR-NEXT:  %4 = muli %2, %3 : i64
+; LLVM optimises it away
+
+; Multiple bind lets (ex2)
+(let ((i argc) (j 20) (k 30)) (add@ii (mul@ii i j) k))
+; AST-NEXT:  Let:
+; AST-NEXT:    type [Integer]
+; AST-NEXT:    Variable:
+; AST-NEXT:      name [i]
+; AST-NEXT:      type [Integer]
+; AST-NEXT:      Variable:
+; AST-NEXT:        name [argc]
+; AST-NEXT:        type [Integer]
+; AST-NEXT:    Variable:
+; AST-NEXT:      name [j]
+; AST-NEXT:      type [Integer]
+; AST-NEXT:      Literal:
+; AST-NEXT:        value [20]
+; AST-NEXT:        type [Integer]
+; AST-NEXT:    Variable:
+; AST-NEXT:      name [k]
+; AST-NEXT:      type [Integer]
+; AST-NEXT:      Literal:
+; AST-NEXT:        value [30]
+; AST-NEXT:        type [Integer]
+; AST-NEXT:    Operation:
+; AST-NEXT:      name [add@ii]
+; AST-NEXT:      type [Integer]
+; AST-NEXT:      Operation:
+; AST-NEXT:        name [mul@ii]
+; AST-NEXT:        type [Integer]
+; AST-NEXT:        Variable:
+; AST-NEXT:          name [i]
+; AST-NEXT:          type [Integer]
+; AST-NEXT:        Variable:
+; AST-NEXT:          name [j]
+; AST-NEXT:          type [Integer]
+; AST-NEXT:      Variable:
+; AST-NEXT:        name [k]
+; AST-NEXT:        type [Integer]
+; MLIR-NEXT:  %c20_i64_1 = constant 20 : i64
+; MLIR-NEXT:  %c30_i64_2 = constant 30 : i64
+; MLIR-NEXT:  %5 = muli %arg0, %c20_i64_1 : i64
+; MLIR-NEXT:  %6 = addi %5, %c30_i64_2 : i64
+; LLVM-NEXT:  %3 = mul i64 %0, 20
+; LLVM-NEXT:  %4 = add i64 %3, 30
 
 ))
 ; AST does not return anything
-; MLIR: return %4 : i64
-; LLVM: ret i64 %5
+; MLIR: return %6 : i64
+; LLVM: ret i64 %4

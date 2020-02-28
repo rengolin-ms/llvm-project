@@ -193,12 +193,17 @@ private:
 /// TODO: Can we declare more than one variable?
 struct Let : public Expr {
   using Ptr = std::unique_ptr<Let>;
-  Let(Expr::Ptr var, Expr::Ptr expr)
-      : Expr(expr->getType(), Expr::Kind::Let), var(std::move(var)),
+  Let(std::vector<Expr::Ptr> &&vars, Expr::Ptr expr)
+      : Expr(expr->getType(), Expr::Kind::Let), vars(std::move(vars)),
         expr(std::move(expr)) {}
 
-  Variable *getVariable() const { return llvm::dyn_cast<Variable>(var.get()); }
+  llvm::ArrayRef<Expr::Ptr> getVariables() const { return vars; }
+  Expr *getVariable(size_t idx) const {
+    assert(idx < vars.size() && "Offset error");
+    return vars[idx].get();
+  }
   Expr *getExpr() const { return expr.get(); }
+  size_t size() const { return vars.size(); }
 
   void dump(size_t tab = 0) const override;
 
@@ -206,7 +211,7 @@ struct Let : public Expr {
   static bool classof(const Expr *c) { return c->kind == Expr::Kind::Let; }
 
 private:
-  Expr::Ptr var;
+  std::vector<Expr::Ptr> vars;
   Expr::Ptr expr;
 };
 
