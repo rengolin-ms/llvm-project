@@ -296,81 +296,7 @@ void test_parser_cond() {
   cout << "    OK\n";
 }
 
-// ======================================================= MLIR test
-
-void test_mlir_decl() {
-  cout << "\n == test_mlir_decl\n";
-  build("(edef fun Integer (Integer))");
-  cout << "    OK\n";
-}
-
-void test_mlir_def() {
-  cout << "\n == test_mlir_def\n";
-  build("(def fun Integer () (10))");
-  cout << "    OK\n";
-}
-
-void test_mlir_op() {
-  cout << "\n == test_mlir_op\n";
-  build("(def fun Integer () (add@ii 10 20)");
-  cout << "    OK\n";
-}
-
-void test_mlir_let() {
-  cout << "\n == test_mlir_let\n";
-  build("(def fun Float () (let (x 10.0) (add@ff x 20.0))");
-  cout << "    OK\n";
-}
-
-void test_mlir_decl_def_use() {
-  cout << "\n == test_mlir_decl_def_use\n";
-  build("(edef ext Integer (Integer))"
-        "(edef fun Integer (Integer))"
-        "(def fun Integer ((x : Integer)) (add@ii x 10))"
-        "(def main Integer () (add@ii (fun 20) (ext 30))");
-  cout << "    OK\n";
-}
-
-void test_mlir_cond() {
-  cout << "\n == test_mlir_cond\n";
-  build("(edef fun Integer (Integer))"
-        "(def fun Integer ((x : Integer)) (add@ii x 10))"
-        "(def main Integer () ((if (true) (fun 20) (add@ii 30 40))");
-  cout << "    OK\n";
-}
-
-void test_mlir_variations() {
-  cout << "\n == test_mlir_variations: Multiple args, last return\n";
-  build("(edef print Float (Float))"
-        "(def fun Integer ((x : Integer) (y : Float))"
-        "                 ((mul@ff y 1.5) (add@ii x 10)))"
-        "(def main Integer () (fun 42 10.0)");
-  cout << "    OK\n";
-}
-
-void test_mlir_roundtrip() {
-  cout << "\n == test_mlir_roundtrip\n";
-  build(
-"module {"
-"  func @print(f64) -> f64"
-"  func @fun(%arg0: i64, %arg1: f64) -> i64 {"
-"    %0 = \"std.constant\"() {value = 1.500000e+00 : f64} : () -> f64"
-"    %1 = \"std.mulf\"(%arg1, %0) : (f64, f64) -> f64"
-"    %2 = \"std.constant\"() {value = 10 : i64} : () -> i64"
-"    %3 = \"std.addi\"(%arg0, %2) : (i64, i64) -> i64"
-"    \"std.return\"(%3) : (i64) -> ()"
-"  }"
-"  func @main() -> i64 {"
-"    %0 = \"std.constant\"() {value = 42 : i64} : () -> i64"
-"    %1 = \"std.constant\"() {value = 1.000000e+01 : f64} : () -> f64"
-"    %2 = \"std.call\"(%0, %1) {callee = @fun} : (i64, f64) -> i64"
-"    \"std.return\"(%2) : (i64) -> ()"
-"  }"
-"}", /*from MLIR=*/true);
-  cout << "    OK\n";
-}
-
-// ======================================================= LLVM IR test
+// ======================================================= MLIR / LLVM IR tests
 
 void test_llvm_ir() {
   cout << "\n == test_llvm_ir_from_ksc\n";
@@ -414,15 +340,6 @@ int test_all(int v=0) {
   test_parser_def();
   test_parser_decl_def_use();
   test_parser_cond();
-
-  test_mlir_decl();
-  test_mlir_def();
-  test_mlir_op();
-  test_mlir_let();
-  test_mlir_decl_def_use();
-  test_mlir_cond();
-  test_mlir_variations();
-  test_mlir_roundtrip();
 
   test_llvm_ir();
 
