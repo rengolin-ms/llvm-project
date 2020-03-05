@@ -107,27 +107,27 @@ void test_parser_block() {
   Literal* op0 = llvm::dyn_cast<Literal>(block->getOperand(0));
   assert(op0);
   assert(op0->getValue() == "10.0");
-  assert(op0->getType() == Expr::Type::Float);
+  assert(op0->getType() == Type::Float);
   Literal* op1 = llvm::dyn_cast<Literal>(block->getOperand(1));
   assert(op1);
   assert(op1->getValue() == "42");
-  assert(op1->getType() == Expr::Type::Integer);
+  assert(op1->getType() == Type::Integer);
   Literal* op2 = llvm::dyn_cast<Literal>(block->getOperand(2));
   assert(op2);
   assert(op2->getValue() == "");
-  assert(op2->getType() == Expr::Type::String);
+  assert(op2->getType() == Type::String);
   Literal* op3 = llvm::dyn_cast<Literal>(block->getOperand(3));
   assert(op3);
   assert(op3->getValue() == " ");
-  assert(op3->getType() == Expr::Type::String);
+  assert(op3->getType() == Type::String);
   Literal* op4 = llvm::dyn_cast<Literal>(block->getOperand(4));
   assert(op4);
   assert(op4->getValue() == "Hello");
-  assert(op4->getType() == Expr::Type::String);
+  assert(op4->getType() == Type::String);
   Literal* op5 = llvm::dyn_cast<Literal>(block->getOperand(5));
   assert(op5);
   assert(op5->getValue() == "Hello world");
-  assert(op5->getType() == Expr::Type::String);
+  assert(op5->getType() == Type::String);
   cout << "    OK\n";
 }
 
@@ -142,21 +142,21 @@ void test_parser_let() {
   Let* def = llvm::dyn_cast<Let>(root->getOperand(0));
   assert(def);
   // Let has two parts: variable definitions and expression
-  assert(def->getType() == Expr::Type::Integer);
+  assert(def->getType() == Type::Integer);
   Variable* x = llvm::dyn_cast<Variable>(def->getVariable(0));
-  assert(x->getType() == Expr::Type::Integer);
+  assert(x->getType() == Type::Integer);
   Operation* expr = llvm::dyn_cast<Operation>(def->getExpr());
   assert(expr);
   assert(expr->getName() == "add@ii");
-  assert(expr->getType() == Expr::Type::Integer);
+  assert(expr->getType() == Type::Integer);
   auto var = llvm::dyn_cast<Variable>(expr->getOperand(0));
   assert(var);
   assert(var->getName() == "x");
-  assert(var->getType() == Expr::Type::Integer);
+  assert(var->getType() == Type::Integer);
   auto lit = llvm::dyn_cast<Literal>(expr->getOperand(1));
   assert(lit);
   assert(lit->getValue() == "10");
-  assert(lit->getType() == Expr::Type::Integer);
+  assert(lit->getType() == Type::Integer);
   cout << "    OK\n";
 }
 
@@ -172,10 +172,10 @@ void test_parser_decl() {
   assert(decl);
   // Declaration has 3 parts: name, return type, arg types decl
   assert(decl->getName() == "fun");
-  assert(decl->getType() == Expr::Type::Float);
-  assert(decl->getArgTypes()[0] == Expr::Type::Integer);
-  assert(decl->getArgTypes()[1] == Expr::Type::String);
-  assert(decl->getArgTypes()[2] == Expr::Type::Bool);
+  assert(decl->getType() == Type::Float);
+  assert(decl->getArgTypes()[0] == Type::Integer);
+  assert(decl->getArgTypes()[1] == Type::String);
+  assert(decl->getArgTypes()[2] == Type::Bool);
   cout << "    OK\n";
 }
 
@@ -192,24 +192,24 @@ void test_parser_def() {
   assert(def);
   // Definition has 4 parts: name, return type, arg types def, expr
   assert(def->getName() == "fun");
-  assert(def->getType() == Expr::Type::Integer);
+  assert(def->getType() == Type::Integer);
   assert(def->size() == 2);
   Variable* x = llvm::dyn_cast<Variable>(def->getArgument(0));
-  assert(x->getType() == Expr::Type::Integer);
+  assert(x->getType() == Type::Integer);
   Block* body = llvm::dyn_cast<Block>(def->getImpl());
   assert(body);
   Operation* expr = llvm::dyn_cast<Operation>(body->getOperand(0));
   assert(expr);
   assert(expr->getName() == "add@ii");
-  assert(expr->getType() == Expr::Type::Integer);
+  assert(expr->getType() == Type::Integer);
   auto var = llvm::dyn_cast<Variable>(expr->getOperand(0));
   assert(var);
   assert(var->getName() == "x");
-  assert(var->getType() == Expr::Type::Integer);
+  assert(var->getType() == Type::Integer);
   auto lit = llvm::dyn_cast<Literal>(expr->getOperand(1));
   assert(lit);
   assert(lit->getValue() == "10");
-  assert(lit->getType() == Expr::Type::Integer);
+  assert(lit->getType() == Type::Integer);
   cout << "    OK\n";
 }
 
@@ -226,7 +226,7 @@ void test_parser_decl_def_use() {
   Definition* main = llvm::dyn_cast<Definition>(root->getOperand(2));
   assert(main);
   assert(main->getName() == "main");
-  assert(main->getType() == Expr::Type::Integer);
+  assert(main->getType() == Type::Integer);
   assert(main->size() == 0);
   // And its implementation
   Block* body = llvm::dyn_cast<Block>(main->getImpl());
@@ -234,21 +234,21 @@ void test_parser_decl_def_use() {
   Operation* impl = llvm::dyn_cast<Operation>(body->getOperand(0));
   assert(impl);
   assert(impl->getName() == "add@ii");
-  assert(impl->getType() == Expr::Type::Integer);
+  assert(impl->getType() == Type::Integer);
   // Arg1 is a call to fun
   Operation* call = llvm::dyn_cast<Operation>(impl->getOperand(0));
   assert(call);
   assert(call->getName() == "fun");
-  assert(call->getType() == Expr::Type::Integer);
+  assert(call->getType() == Type::Integer);
   auto arg0 = llvm::dyn_cast<Literal>(call->getOperand(0));
   assert(arg0);
   assert(arg0->getValue() == "10");
-  assert(arg0->getType() == Expr::Type::Integer);
+  assert(arg0->getType() == Type::Integer);
   // Arg2 is just a literal
   auto lit = llvm::dyn_cast<Literal>(impl->getOperand(1));
   assert(lit);
   assert(lit->getValue() == "10");
-  assert(lit->getType() == Expr::Type::Integer);
+  assert(lit->getType() == Type::Integer);
   cout << "    OK\n";
 }
 
@@ -270,29 +270,85 @@ void test_parser_cond() {
   auto condVal = llvm::dyn_cast<Literal>(c->getOperand(0));
   assert(condVal);
   assert(condVal->getValue() == "true");
-  assert(condVal->getType() == Expr::Type::Bool);
+  assert(condVal->getType() == Type::Bool);
   // If block is "fun" call
   Operation* call = llvm::dyn_cast<Operation>(cond->getIfBlock());
   assert(call);
   assert(call->getName() == "fun");
-  assert(call->getType() == Expr::Type::Integer);
+  assert(call->getType() == Type::Integer);
   auto arg = llvm::dyn_cast<Literal>(call->getOperand(0));
   assert(arg);
   assert(arg->getValue() == "10");
-  assert(arg->getType() == Expr::Type::Integer);
+  assert(arg->getType() == Type::Integer);
   // Else block is an "add" op
   Operation* expr = llvm::dyn_cast<Operation>(cond->getElseBlock());
   assert(expr);
   assert(expr->getName() == "add@ii");
-  assert(expr->getType() == Expr::Type::Integer);
+  assert(expr->getType() == Type::Integer);
   auto op0 = llvm::dyn_cast<Literal>(expr->getOperand(0));
   assert(op0);
   assert(op0->getValue() == "10");
-  assert(op0->getType() == Expr::Type::Integer);
+  assert(op0->getType() == Type::Integer);
   auto op1 = llvm::dyn_cast<Literal>(expr->getOperand(1));
   assert(op1);
   assert(op1->getValue() == "10");
-  assert(op1->getType() == Expr::Type::Integer);
+  assert(op1->getType() == Type::Integer);
+  cout << "    OK\n";
+}
+
+void test_parser_build() {
+  cout << "\n == test_parser_build\n";
+  const Expr::Ptr tree = parse("(build 10 (lam (i : Integer) (add@ii i i))))");
+
+  // Root can have many exprs, here only one
+  Block* root = llvm::dyn_cast<Block>(tree.get());
+  assert(root);
+  // Kind is Build
+  Build* build = llvm::dyn_cast<Build>(root->getOperand(0));
+  assert(build);
+  // Build has three parts: range definition, induction variable and loop body
+  assert(build->getType() == Type::Vector);
+  assert(build->getType().getSubType() == Type::Integer);
+  auto range = llvm::dyn_cast<Literal>(build->getRange());
+  assert(range);
+  assert(range->getValue() == "10");
+  assert(range->getType() == Type::Integer);
+  Variable* v = llvm::dyn_cast<Variable>(build->getVariable());
+  assert(v->getType() == Type::Integer);
+  Operation* expr = llvm::dyn_cast<Operation>(build->getExpr());
+  assert(expr);
+  assert(expr->getName() == "add@ii");
+  assert(expr->getType() == Type::Integer);
+  auto var = llvm::dyn_cast<Variable>(expr->getOperand(0));
+  assert(var);
+  assert(var->getName() == "i");
+  assert(var->getType() == Type::Integer);
+  var = llvm::dyn_cast<Variable>(expr->getOperand(1));
+  assert(var);
+  assert(var->getName() == "i");
+  assert(var->getType() == Type::Integer);
+  cout << "    OK\n";
+}
+
+void test_parser_index() {
+  cout << "\n == test_parser_index\n";
+  const Expr::Ptr tree = parse("(index 5 (build 10 (lam (i : Integer) (add@ii i i))))");
+
+  // Root can have many exprs, here only one
+  Block* root = llvm::dyn_cast<Block>(tree.get());
+  assert(root);
+  // Kind is Build
+  Index* index = llvm::dyn_cast<Index>(root->getOperand(0));
+  assert(index);
+  // Build has two parts: index definition and vector
+  assert(index->getType() == Type::Integer);
+  auto i = llvm::dyn_cast<Literal>(index->getIndex());
+  assert(i);
+  assert(i->getValue() == "5");
+  assert(i->getType() == Type::Integer);
+  Expr* v = index->getVariable();
+  assert(v->getType() == Type::Vector);
+  assert(v->getType().getSubType() == Type::Integer);
   cout << "    OK\n";
 }
 
@@ -340,6 +396,8 @@ int test_all(int v=0) {
   test_parser_def();
   test_parser_decl_def_use();
   test_parser_cond();
+  test_parser_build();
+  test_parser_index();
 
   test_llvm_ir();
 

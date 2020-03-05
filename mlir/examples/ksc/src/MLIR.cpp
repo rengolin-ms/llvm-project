@@ -24,16 +24,23 @@ using namespace std;
 //============================================================ Helpers
 
 // Convert from AST type to MLIR
-mlir::Type Generator::ConvertType(AST::Expr::Type type) {
+mlir::Type Generator::ConvertType(AST::Type type, size_t dim) {
   switch (type) {
-  case AST::Expr::Type::None:
+  case AST::Type::None:
     return builder.getNoneType();
-  case AST::Expr::Type::Bool:
+  case AST::Type::Bool:
     return builder.getI1Type();
-  case AST::Expr::Type::Integer:
+  case AST::Type::Integer:
     return builder.getIntegerType(64);
-  case AST::Expr::Type::Float:
+  case AST::Type::Float:
     return builder.getF64Type();
+  case AST::Type::Vector:
+    // FIXME: support nested vectors, ex: (Vec (Vec Ty))
+    assert(type.getSubType() != AST::Type::Vector);
+    if (dim)
+      return mlir::MemRefType::get(dim, ConvertType(type.getSubType()));
+    else
+      return mlir::UnrankedMemRefType::get(ConvertType(type.getSubType()), 0);
   default:
     assert(0 && "Unsupported type");
   }
@@ -58,7 +65,8 @@ const mlir::ModuleOp Generator::build(const AST::Expr* root) {
   assert(root->kind == AST::Expr::Kind::Block);
   auto rB = llvm::dyn_cast<AST::Block>(root);
   buildGlobal(rB);
-  assert(!mlir::failed(mlir::verify(*module)) && "Validation failed!");
+  if (mlir::failed(mlir::verify(*module)))
+    return nullptr;
   return module.get();
 }
 
@@ -163,6 +171,10 @@ mlir::Value Generator::buildNode(const AST::Expr* node) {
     return buildCond(llvm::dyn_cast<AST::Condition>(node));
   if (AST::Variable::classof(node))
     return buildVariable(llvm::dyn_cast<AST::Variable>(node));
+  if (AST::Build::classof(node))
+    return buildBuild(llvm::dyn_cast<AST::Build>(node));
+  if (AST::Index::classof(node))
+    return buildIndex(llvm::dyn_cast<AST::Index>(node));
   // TODO: Implement all node types
   assert(0 && "unexpected node");
 }
@@ -231,14 +243,17 @@ mlir::Value Generator::buildOp(const AST::Operation* op) {
   assert(0 && "Unknown operation");
 }
 
-// Builds lexical blocks
+// Builds variable declarations
 mlir::Value Generator::buildLet(const AST::Let* let) {
   // Bind the variable to an expression
   // TODO: Use context
   for (auto &v: let->getVariables())
     declareVariable(llvm::dyn_cast<AST::Variable>(v.get()));
   // Lower the body, using the variable
-  return buildNode(let->getExpr());
+  if (let->getExpr())
+    return buildNode(let->getExpr());
+  // Otherwise, the let is just a declaration, return void
+  return mlir::Value();
 }
 
 // Builds conditions, create new basic blocks
@@ -269,22 +284,91 @@ mlir::Value Generator::buildCond(const AST::Condition* cond) {
   return tailBlock->getArgument(0);
 }
 
+// Builds loops creating vectors [WIP]
+mlir::Value Generator::buildBuild(const AST::Build* b) {
+  // Declare the bounded vector variable and allocate it
+  // FIXME: Allow dim to be a dynamic runtime expression
+  auto lit = llvm::dyn_cast<AST::Literal>(b->getRange());
+  assert(lit && "Dynamic range not supported");
+  size_t dim = std::atol(lit->getValue().str().c_str());
+  auto ivTy = ConvertType(lit->getType());
+  auto vecTy = mlir::MemRefType::get(dim, ivTy);
+  auto vec = builder.create<mlir::AllocOp>(UNK, vecTy);
+
+  // Declare the range, initialised with zero
+  auto zeroAttr = builder.getIntegerAttr(ivTy, 0);
+  auto zero = builder.create<mlir::ConstantOp>(UNK, ivTy, zeroAttr);
+  auto range = buildNode(b->getRange());
+
+  // Create all basic blocks and the condition
+  auto headBlock = currentFunc.addBlock();
+  headBlock->addArgument(ivTy);
+  auto bodyBlock = currentFunc.addBlock();
+  bodyBlock->addArgument(ivTy);
+  auto exitBlock = currentFunc.addBlock();
+  mlir::ValueRange indArg {zero};
+  builder.create<mlir::BranchOp>(UNK, headBlock, indArg);
+
+  // HEAD BLOCK: Compare induction with range, exit if equal or greater
+  builder.setInsertionPointToEnd(headBlock);
+  auto headIv = headBlock->getArgument(0);
+  auto cond = builder.create<mlir::CmpIOp>(UNK, mlir::CmpIPredicate::slt, headIv, range);
+  mlir::ValueRange bodyArg {headIv};
+  mlir::ValueRange exitArgs {};
+  builder.create<mlir::CondBranchOp>(UNK, cond, bodyBlock, bodyArg, exitBlock, exitArgs);
+
+  // BODY BLOCK: Lowers expression, store and increment
+  builder.setInsertionPointToEnd(bodyBlock);
+  auto bodyIv = bodyBlock->getArgument(0);
+  // Declare the local induction variable before using in body
+  auto var = llvm::dyn_cast<AST::Variable>(b->getVariable());
+  declareVariable(var);
+  variables[var->getName()] = bodyIv;
+  // Build body and store result
+  auto expr = buildNode(b->getExpr());
+  auto indTy = builder.getIndexType();
+  auto indIv = builder.create<mlir::IndexCastOp>(UNK, bodyIv, indTy);
+  mlir::ValueRange indices{indIv};
+  builder.create<mlir::StoreOp>(UNK, expr, vec, indices);
+  // Increment induction and loop
+  auto oneAttr = builder.getIntegerAttr(ivTy, 1);
+  auto one = builder.create<mlir::ConstantOp>(UNK, ivTy, oneAttr);
+  auto incr = builder.create<mlir::AddIOp>(UNK, bodyIv, one);
+  mlir::ValueRange headArg {incr};
+  builder.create<mlir::BranchOp>(UNK, headBlock, headArg);
+
+  // EXIT BLOCK: change insertion point before returning the final vector
+  builder.setInsertionPointToEnd(exitBlock);
+  return vec;
+}
+
+// Builds index access to vectors
+mlir::Value Generator::buildIndex(const AST::Index* i) {
+  auto idx = buildNode(i->getIndex());
+  auto var = llvm::dyn_cast<AST::Variable>(i->getVariable());
+  auto vec = variables[var->getName()];
+  auto indTy = builder.getIndexType();
+  auto indIdx = builder.create<mlir::IndexCastOp>(UNK, idx, indTy);
+  mlir::ValueRange rangeIdx {indIdx};
+  return builder.create<mlir::LoadOp>(UNK, vec, rangeIdx);
+}
+
 // Lower constant literals
 mlir::Attribute Generator::getAttr(const AST::Expr* op) {
   auto lit = llvm::dyn_cast<AST::Literal>(op);
   assert(lit && "Can only get attributes from lits");
   switch (lit->getType()) {
-  case AST::Expr::Type::Bool:
+  case AST::Type::Bool:
     if (lit->getValue() == "true")
       return builder.getBoolAttr(true);
     else
       return builder.getBoolAttr(false);
-  case AST::Expr::Type::Float:
+  case AST::Type::Float:
     return builder.getFloatAttr(builder.getF64Type(),
                                 std::atof(lit->getValue().str().c_str()));
-  case AST::Expr::Type::Integer:
+  case AST::Type::Integer:
     return builder.getI64IntegerAttr(std::atol(lit->getValue().str().c_str()));
-  case AST::Expr::Type::String:
+  case AST::Type::String:
     return builder.getStringAttr(lit->getValue());
   default:
     assert(0 && "Unimplemented literal type");
@@ -300,7 +384,8 @@ const mlir::ModuleOp Generator::build(const std::string& mlir) {
       llvm::MemoryBuffer::getMemBufferCopy(mlir);
   sourceMgr.AddNewSourceBuffer(std::move(*srcOrErr), llvm::SMLoc());
   module = mlir::parseSourceFile(sourceMgr, builder.getContext());
-  assert(!mlir::failed(mlir::verify(*module)) && "Validation failed!");
+  if (mlir::failed(mlir::verify(*module)))
+    return nullptr;
   return module.get();
 }
 

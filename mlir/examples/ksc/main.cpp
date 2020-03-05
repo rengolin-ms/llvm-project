@@ -88,6 +88,10 @@ int main(int argc, char **argv) {
   // Parse and output AST if requested
   Parser p(code);
   p.parse();
+  if (!p.getRootNode()) {
+    cerr << "ERROR: AST lowering failed\n";
+    return 1;
+  }
   if (action == Action::EMIT_AST) {
     p.getRootNode()->dump();
     return 0;
@@ -96,10 +100,19 @@ int main(int argc, char **argv) {
   // Call generator and print output (MLIR/LLVM)
   Generator g;
   auto module = g.build(p.getRootNode());
+  if (!module) {
+    cerr << "ERROR: MLIR lowering failed\n";
+    return 1;
+  }
   if (action == Action::EMIT_MLIR) {
     module.dump();
   } else if (action == Action::EMIT_LLVM) {
-    g.emitLLVM()->dump();
+    auto llvm = g.emitLLVM();
+    if (!llvm) {
+      cerr << "ERROR: LLVM lowering failed\n";
+      return 1;
+    }
+    llvm->dump();
   }
 
   return 0;

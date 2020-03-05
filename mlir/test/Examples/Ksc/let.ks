@@ -27,6 +27,18 @@
 ; MLIR: func @main(%arg0: i64) -> i64 {
 ; LLVM: define i64 @main(i64 %0) {
 
+; Just defines the variable, returns void
+(let (variable 123.456))
+; AST:       Let:
+; AST-NEXT:    type [none]
+; AST-NEXT:    Variable:
+; AST-NEXT:      name [variable]
+; AST-NEXT:      type [Float]
+; AST-NEXT:      Literal:
+; AST-NEXT:        value [123.456]
+; AST-NEXT:        type [Float]
+; MLIR: %cst = constant 1.234560e+02 : f64
+
 ; Return the value of x
 (let (x 10) x)
 ; AST:       Let:

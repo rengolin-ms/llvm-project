@@ -8,56 +8,56 @@ using namespace Knossos::AST;
 
 //================================================ Helpers
 
-static Expr::Type Str2Type(llvm::StringRef ty) {
+static Type Str2Type(llvm::StringRef ty) {
   if (ty == "String")
-    return Expr::Type::String;
+    return Type::String;
   if (ty == "Bool")
-    return Expr::Type::Bool;
+    return Type::Bool;
   if (ty == "Integer")
-    return Expr::Type::Integer;
+    return Type::Integer;
   if (ty == "Float")
-    return Expr::Type::Float;
+    return Type::Float;
   if (ty == "Tuple")
-    return Expr::Type::Tuple;
+    return Type::Tuple;
   if (ty == "Vec")
-    return Expr::Type::Vec;
+    return Type::Vector;
   if (ty == "Lambda")
-    return Expr::Type::Lambda;
+    return Type::Lambda;
   if (ty == "LM")
-    return Expr::Type::LM;
-  return Expr::Type::None;
+    return Type::LM;
+  return Type::None;
 }
 
-static const string Type2Str(Expr::Type type) {
+static const string Type2Str(Type type) {
   switch (type) {
-  case Expr::Type::None:
+  case Type::None:
     return "none";
-  case Expr::Type::String:
+  case Type::String:
     return "String";
-  case Expr::Type::Bool:
+  case Type::Bool:
     return "Bool";
-  case Expr::Type::Integer:
+  case Type::Integer:
     return "Integer";
-  case Expr::Type::Float:
+  case Type::Float:
     return "Float";
-  case Expr::Type::Tuple:
+  case Type::Tuple:
     return "Tuple";
-  case Expr::Type::Vec:
+  case Type::Vector:
     return "Vec";
-  case Expr::Type::Lambda:
+  case Type::Lambda:
     return "Lambda";
-  case Expr::Type::LM:
+  case Type::LM:
     return "LM";
   }
 }
 
-static Expr::Type LiteralType(llvm::StringRef str) {
+static Type LiteralType(llvm::StringRef str) {
   // String
   if (str[0] == '"' && str[str.size() - 1] == '"')
-    return Expr::Type::String;
+    return Type::String;
   // Bool
   if (str == "true" || str == "false")
-    return Expr::Type::Bool;
+    return Type::Bool;
   // Number
   bool isNumber = true;
   bool isFloat = false;
@@ -71,18 +71,18 @@ static Expr::Type LiteralType(llvm::StringRef str) {
   }
   if (isNumber) {
     if (isFloat)
-      return Expr::Type::Float;
+      return Type::Float;
     else
-      return Expr::Type::Integer;
+      return Type::Integer;
   }
 
   // TODO: detect Tuple, Vec, Lambda, LM
-  return Expr::Type::None;
+  return Type::None;
 }
 
 static bool isLiteralOrType(llvm::StringRef str) {
-  return Str2Type(str) != Expr::Type::None ||
-         LiteralType(str) != Expr::Type::None;
+  return Str2Type(str) != Type::None ||
+         LiteralType(str) != Type::None;
 }
 
 static llvm::StringRef unquote(llvm::StringRef original) {
@@ -190,6 +190,10 @@ Expr::Ptr Parser::parseToken(const Token *tok) {
       return parseDef(tok);
     } else if (value == "if") {
       return parseCond(tok);
+    } else if (value == "build") {
+      return parseBuild(tok);
+    } else if (value == "index") {
+      return parseIndex(tok);
     } else if (value == "rule") {
       return parseRule(tok);
     }
@@ -229,15 +233,15 @@ Expr::Ptr Parser::parseValue(const Token *tok) {
   string value = tok->getValue().str();
 
   // Type names: Integer, Float, Bool, String...
-  Expr::Type ty = Str2Type(value);
-  if (ty != Expr::Type::None) {
-    return unique_ptr<Expr>(new Type(value, ty));
+  Type ty = Str2Type(value);
+  if (ty != Type::None) {
+    return unique_ptr<Expr>(new TypeDecl(ty));
   }
   // Literals: 10.0 42 "Hello" (not hello, that's a variable use)
   ty = LiteralType(value);
-  if (ty != Expr::Type::None) {
+  if (ty != Type::None) {
     // Trim quotes "" from strings before creating constant
-    if (ty == Expr::Type::String)
+    if (ty == Type::String)
       value = value.substr(1, value.length()-2);
     return unique_ptr<Expr>(new Literal(value, ty));
   }
@@ -259,7 +263,7 @@ Expr::Ptr Parser::parseCall(const Token *tok) {
   assert(decl);
 
   vector<Expr> operands;
-  Expr::Type type = decl->getType();
+  Type type = decl->getType();
   Operation *o = new Operation(name, type);
   for (auto &c : tok->getTail())
     o->addOperand(parseToken(c.get()));
@@ -281,7 +285,7 @@ Expr::Ptr Parser::parseOperation(const Token *tok) {
   for (auto &c : tok->getTail())
     operands.push_back(parseToken(c.get()));
   // Validate types
-  Expr::Type type = operands[0]->getType();
+  Type type = operands[0]->getType();
   for (auto &o : operands)
     assert(o->getType() == type);
   // Create the op and return
@@ -298,8 +302,8 @@ Expr::Ptr Parser::parseVariable(const Token *tok) {
   string value = children[0]->getValue().str();
   // Variable declaration: (name : Type) : add name to SymbolTable
   if (tok->size() == 3 && children[1]->getValue() == ":") {
-    Expr::Type type = Str2Type(children[2]->getValue());
-    assert(type != Expr::Type::None);
+    Type type = Str2Type(children[2]->getValue());
+    assert(type != Type::None);
     auto var = unique_ptr<Variable>(new Variable(value, type));
     variables.add(value, var.get());
     return var;
@@ -321,11 +325,10 @@ Expr::Ptr Parser::parseVariable(const Token *tok) {
   assert(0 && "Invalid variable declaration/definition");
 }
 
-// Sub-expr with contextual variables: (let (x 10) (add x 10))
+// Variable declaration: (let (x 10) (add x 10))
 Expr::Ptr Parser::parseLet(const Token *tok) {
-  assert(tok->size() == 3);
+  assert(tok->size() >= 2 && tok->size() <= 3);
   const Token *bond = tok->getChild(1);
-  const Token *expr = tok->getChild(2);
   assert(!bond->isValue);
   vector<Expr::Ptr> vars;
   // Single variable binding
@@ -338,8 +341,12 @@ Expr::Ptr Parser::parseLet(const Token *tok) {
       vars.push_back(parseVariable(c.get()));
   }
 
-  auto body = parseToken(expr);
-  return make_unique<Let>(move(vars), move(body));
+  if (tok->size() == 2) {
+    return make_unique<Let>(move(vars));
+  } else {
+    auto body = parseToken(tok->getChild(2));
+    return make_unique<Let>(move(vars), move(body));
+  }
 }
 
 // Declares a function (and add it to symbol table)
@@ -417,6 +424,36 @@ Expr::Ptr Parser::parseCond(const Token *tok) {
   return make_unique<Condition>(move(c), move(i), move(e));
 }
 
+// Loops, ex: (build N (lam (i : Integer) (add@ii i i)))
+Expr::Ptr Parser::parseBuild(const Token *tok) {
+  assert(tok->size() == 3);
+  assert(tok->getChild(1)->isValue);
+  auto range = parseToken(tok->getChild(1));
+
+  const Token *lam = tok->getChild(2);
+  assert(!lam->isValue);
+  assert(lam->getChild(0)->isValue && lam->getChild(0)->getValue() == "lam");
+  const Token *bond = lam->getChild(1);
+  const Token *expr = lam->getChild(2);
+  auto var = parseVariable(bond);
+  // Variables are initialised as zero by default
+  assert(var->kind == Expr::Kind::Variable);
+  assert(var->getType() == AST::Type::Integer);
+  llvm::dyn_cast<Variable>(var.get())->setInit(
+      make_unique<Literal>("0", AST::Type::Integer));
+  auto body = parseToken(expr);
+
+  return make_unique<Build>(move(range), move(var), move(body));
+}
+
+// Index, ex: (index N vector)
+Expr::Ptr Parser::parseIndex(const Token *tok) {
+  assert(tok->size() == 3);
+  auto index = parseToken(tok->getChild(1));
+  auto vector = parseToken(tok->getChild(2));
+  return make_unique<Index>(move(index), move(vector));
+}
+
 // Rule: (rule "mul2" (v : Float) (mul@ff v 2.0) (add v v))
 Expr::Ptr Parser::parseRule(const Token *tok) {
   assert(tok->size() == 5);
@@ -458,8 +495,8 @@ void Block::dump(size_t tab) const {
     op->dump(tab + 2);
 }
 
-void Type::dump(size_t tab) const {
-  cout << string(tab, ' ') << "Type:" << endl;
+void TypeDecl::dump(size_t tab) const {
+  cout << string(tab, ' ') << "TypeDecl:" << endl;
   Expr::dump(tab + 2);
 }
 
@@ -482,7 +519,8 @@ void Let::dump(size_t tab) const {
   Expr::dump(tab + 2);
   for (auto &v: vars)
     v->dump(tab + 2);
-  expr->dump(tab + 2);
+  if (expr)
+    expr->dump(tab + 2);
 }
 
 void Operation::dump(size_t tab) const {
@@ -522,6 +560,26 @@ void Condition::dump(size_t tab) const {
   ifBlock->dump(tab + 4);
   cout << string(tab + 2, ' ') << "False branch:" << endl;
   elseBlock->dump(tab + 4);
+}
+
+void Build::dump(size_t tab) const {
+  cout << string(tab, ' ') << "Build:" << endl;
+  Expr::dump(tab + 2);
+  cout << string(tab + 2, ' ') << "Range:" << endl;
+  range->dump(tab + 4);
+  cout << string(tab + 2, ' ') << "Induction:" << endl;
+  var->dump(tab + 4);
+  cout << string(tab + 2, ' ') << "Body:" << endl;
+  expr->dump(tab + 4);
+}
+
+void Index::dump(size_t tab) const {
+  cout << string(tab, ' ') << "Index:" << endl;
+  Expr::dump(tab + 2);
+  cout << string(tab + 2, ' ') << "Value:" << endl;
+  index->dump(tab + 2);
+  cout << string(tab + 2, ' ') << "Vector:" << endl;
+  var->dump(tab + 2);
 }
 
 void Rule::dump(size_t tab) const {

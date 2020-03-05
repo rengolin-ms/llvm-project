@@ -21,6 +21,60 @@ struct Location {
   size_t column = 0;
 };
 
+/// Type checking occurs from bottom up. Each node is responsible for its own
+/// checks and, if valid, their return type can be used for the parents.
+/// Function and variable types are checked by the symbol table
+struct Type {
+  /// Not enum class because we're already inside Type
+  ///// so we can already use AST::Type::Integer
+  enum ValidType {
+    None,
+    String,
+    Bool,
+    Integer,
+    Float,
+    LAST_SCALAR=Float,
+    Tuple,
+    Vector,
+    Lambda,
+    /// This is not a valid IR type, but can be parsed
+    LM
+  };
+
+  /// Scalar constructor
+  Type(ValidType type) : type(type) {
+    assert(type >= None && type <= LAST_SCALAR && "Wrong ctor");
+  }
+  /// Vector constructor
+  Type(ValidType type, ValidType subTy) : type(type) {
+    assert(type == Vector && "Wrong ctor");
+    subTypes.push_back(subTy);
+  }
+  /// Tuple constructor
+  Type(ValidType type, std::vector<Type> &&subTys) : type(type) {
+    assert(type == Tuple && subTys.size() > 1 && "Wrong ctor");
+    subTypes = std::move(subTys);
+  }
+  operator ValidType() const { return type; }
+  bool operator ==(ValidType oTy) const {
+    return type == oTy;
+  }
+  // Vector accessor
+  ValidType getSubType() const {
+    assert(type == Vector);
+    return subTypes[0];
+  }
+  // Tuple accessor
+  ValidType getSubType(size_t idx) const {
+    assert(type == Tuple);
+    return subTypes[idx];
+  }
+
+protected:
+  ValidType type;
+  std::vector<Type> subTypes;
+};
+
 /// A node in the AST.
 struct Expr {
   using Ptr = std::unique_ptr<Expr>;
@@ -38,6 +92,8 @@ struct Expr {
     Condition,
     Operation,
     Rule,
+    Build,
+    Index,
     /// Unused below (TODO: Implement those)
     Fold,
     Lambda,
@@ -46,25 +102,7 @@ struct Expr {
     Assert
   };
 
-  /// Type checking occurs from bottom up. Each node is responsible for its own
-  /// checks and, if valid, their return type can be used for the parents.
-  /// Function and variable types are checked by the symbol table
-  enum class Type {
-    None,
-    String,
-    Bool,
-    Integer,
-    Float,
-    LAST = Float,
-    /// Unused below (TODO: Implement those)
-    Tuple,
-    Vec,
-    Lambda,
-    LM
-  };
-
   /// valid types, for safety checks
-  bool isValidType() const { return type > Type::None && type <= Type::LAST; }
   Type getType() const { return type; }
 
   /// Type of the node, for quick access
@@ -85,8 +123,8 @@ protected:
 /// Block node has nothing but children
 struct Block : public Expr {
   using Ptr = std::unique_ptr<Block>;
-  Block() : Expr(Expr::Type::None, Expr::Kind::Block) {}
-  Block(Expr::Ptr op) : Expr(Expr::Type::None, Expr::Kind::Block) {
+  Block() : Expr(Type::None, Kind::Block) {}
+  Block(Expr::Ptr op) : Expr(Type::None, Kind::Block) {
     operands.push_back(std::move(op));
   }
 
@@ -103,30 +141,25 @@ struct Block : public Expr {
   void dump(size_t tab = 0) const override;
 
   /// LLVM RTTI
-  static bool classof(const Expr *c) { return c->kind == Expr::Kind::Block; }
+  static bool classof(const Expr *c) { return c->kind == Kind::Block; }
 
 private:
   std::vector<Expr::Ptr> operands;
 };
 
-/// Types, ex: Float, String, Bool
+/// Type declaration, ex: Float, String, Bool
 ///
 /// These are constant immutable objects. If no type match,
 /// the type remains None and this is not a type.
-struct Type : public Expr {
-  using Ptr = std::unique_ptr<Type>;
-  Type(llvm::StringRef value, Expr::Type type)
-      : Expr(type, Expr::Kind::Type), value(value) {}
-
-  llvm::StringRef getValue() { return value; }
+struct TypeDecl : public Expr {
+  using Ptr = std::unique_ptr<TypeDecl>;
+  TypeDecl(Type type)
+      : Expr(type, Kind::Type) {}
 
   void dump(size_t tab = 0) const override;
 
   /// LLVM RTTI
-  static bool classof(const Expr *c) { return c->kind == Expr::Kind::Type; }
-
-private:
-  std::string value;
+  static bool classof(const Expr *c) { return c->kind == Kind::Type; }
 };
 
 /// Literals, ex: "Hello", 10.0, 123, false
@@ -135,17 +168,15 @@ private:
 /// Type is determined by the parser.
 struct Literal : public Expr {
   using Ptr = std::unique_ptr<Literal>;
-  Literal(llvm::StringRef value, Expr::Type type)
-      : Expr(type, Expr::Kind::Literal), value(value) {
-    assert(isValidType() && "Invalid type");
-  }
+  Literal(llvm::StringRef value, Type type)
+      : Expr(type, Kind::Literal), value(value) {}
 
   llvm::StringRef getValue() const { return value; }
 
   void dump(size_t tab = 0) const override;
 
   /// LLVM RTTI
-  static bool classof(const Expr *c) { return c->kind == Expr::Kind::Literal; }
+  static bool classof(const Expr *c) { return c->kind == Kind::Literal; }
 
 private:
   std::string value;
@@ -162,13 +193,13 @@ struct Variable : public Expr {
   /// Definition: (x 10) in ( let (x 10) (expr) )
   /// Declaration: (x : Integer) in ( def name Type (x : Integer) (expr) )
   /// We need to bind first, then assign to allow nested lets
-  Variable(llvm::StringRef name, Expr::Type type=Expr::Type::None)
-      : Expr(type, Expr::Kind::Variable), name(name), init(nullptr) {}
+  Variable(llvm::StringRef name, Type type=Type::None)
+      : Expr(type, Kind::Variable), name(name), init(nullptr) {}
 
   void setInit(Expr::Ptr &&expr) {
     assert(!init);
     init = std::move(expr);
-    if (type != Expr::Type::None)
+    if (type != Type::None)
       assert(type == init->getType());
     else
       type = init->getType();
@@ -180,21 +211,23 @@ struct Variable : public Expr {
   void dump(size_t tab = 0) const override;
 
   /// LLVM RTTI
-  static bool classof(const Expr *c) { return c->kind == Expr::Kind::Variable; }
+  static bool classof(const Expr *c) { return c->kind == Kind::Variable; }
 
 private:
   std::string name;
   Expr::Ptr init;
 };
 
-/// Lexical bloc, ex: (let (x 10) (add x 10))
+/// Let, ex: (let (x 10) (add x 10))
 ///
-/// Defines a variable to be used insode the scope.
-/// TODO: Can we declare more than one variable?
+/// Defines a variable.
 struct Let : public Expr {
   using Ptr = std::unique_ptr<Let>;
+  Let(std::vector<Expr::Ptr> &&vars)
+      : Expr(Type::None, Kind::Let), vars(std::move(vars)),
+      expr(nullptr) {}
   Let(std::vector<Expr::Ptr> &&vars, Expr::Ptr expr)
-      : Expr(expr->getType(), Expr::Kind::Let), vars(std::move(vars)),
+      : Expr(expr->getType(), Kind::Let), vars(std::move(vars)),
         expr(std::move(expr)) {}
 
   llvm::ArrayRef<Expr::Ptr> getVariables() const { return vars; }
@@ -208,7 +241,7 @@ struct Let : public Expr {
   void dump(size_t tab = 0) const override;
 
   /// LLVM RTTI
-  static bool classof(const Expr *c) { return c->kind == Expr::Kind::Let; }
+  static bool classof(const Expr *c) { return c->kind == Kind::Let; }
 
 private:
   std::vector<Expr::Ptr> vars;
@@ -224,8 +257,8 @@ private:
 /// For calls, return type and operand types must match declaration.
 struct Operation : public Expr {
   using Ptr = std::unique_ptr<Operation>;
-  Operation(llvm::StringRef name, Expr::Type type)
-      : Expr(type, Expr::Kind::Operation), name(name) {}
+  Operation(llvm::StringRef name, Type type)
+      : Expr(type, Kind::Operation), name(name) {}
 
   void addOperand(Expr::Ptr op) { operands.push_back(std::move(op)); }
   llvm::ArrayRef<Expr::Ptr> getOperands() const { return operands; }
@@ -240,7 +273,7 @@ struct Operation : public Expr {
 
   /// LLVM RTTI
   static bool classof(const Expr *c) {
-    return c->kind == Expr::Kind::Operation;
+    return c->kind == Kind::Operation;
   }
 
 private:
@@ -255,12 +288,12 @@ private:
 /// the final IR.
 struct Declaration : public Expr {
   using Ptr = std::unique_ptr<Declaration>;
-  Declaration(llvm::StringRef name, Expr::Type type)
-      : Expr(type, Expr::Kind::Declaration), name(name) {}
+  Declaration(llvm::StringRef name, Type type)
+      : Expr(type, Kind::Declaration), name(name) {}
 
-  void addArgType(Expr::Type opt) { argTypes.push_back(opt); }
-  llvm::ArrayRef<Expr::Type> getArgTypes() const { return argTypes; }
-  Expr::Type getArgType(size_t idx) const {
+  void addArgType(Type opt) { argTypes.push_back(opt); }
+  llvm::ArrayRef<Type> getArgTypes() const { return argTypes; }
+  Type getArgType(size_t idx) const {
     assert(idx < argTypes.size() && "Offset error");
     return argTypes[idx];
   }
@@ -271,12 +304,12 @@ struct Declaration : public Expr {
 
   /// LLVM RTTI
   static bool classof(const Expr *c) {
-    return c->kind == Expr::Kind::Declaration;
+    return c->kind == Kind::Declaration;
   }
 
 private:
   std::string name;
-  std::vector<Expr::Type> argTypes;
+  std::vector<Type> argTypes;
 };
 
 /// Definition, ex: (def fwd$to_float Float ((x : Integer) (dx : (Tuple))) 0.0)
@@ -286,8 +319,8 @@ private:
 /// validating the arguments and return types.
 struct Definition : public Expr {
   using Ptr = std::unique_ptr<Definition>;
-  Definition(llvm::StringRef name, Expr::Type type, Expr::Ptr impl)
-      : Expr(type, Expr::Kind::Definition), impl(std::move(impl)) {
+  Definition(llvm::StringRef name, Type type, Expr::Ptr impl)
+      : Expr(type, Kind::Definition), impl(std::move(impl)) {
     proto = std::make_unique<Declaration>(name, type);
   }
 
@@ -310,7 +343,7 @@ struct Definition : public Expr {
 
   /// LLVM RTTI
   static bool classof(const Expr *c) {
-    return c->kind == Expr::Kind::Definition;
+    return c->kind == Kind::Definition;
   }
 
 private:
@@ -323,9 +356,9 @@ private:
 struct Condition : public Expr {
   using Ptr = std::unique_ptr<Condition>;
   Condition(Expr::Ptr cond, Expr::Ptr ifBlock, Expr::Ptr elseBlock)
-      : Expr(Expr::Type::None, Expr::Kind::Condition), cond(std::move(cond)),
+      : Expr(Type::None, Kind::Condition), cond(std::move(cond)),
         ifBlock(std::move(ifBlock)), elseBlock(std::move(elseBlock)) {
-    assert(this->cond->getType() == Expr::Type::Bool &&
+    assert(this->cond->getType() == Type::Bool &&
            "Condition should be boolean");
     assert(this->ifBlock->getType() == this->elseBlock->getType() &&
            "Type mismatch");
@@ -340,13 +373,63 @@ struct Condition : public Expr {
 
   /// LLVM RTTI
   static bool classof(const Expr *c) {
-    return c->kind == Expr::Kind::Condition;
+    return c->kind == Kind::Condition;
   }
 
 private:
   Expr::Ptr cond;
   Expr::Ptr ifBlock;
   Expr::Ptr elseBlock;
+};
+
+/// Build, ex: (build N (lam (var) (expr)))
+///
+/// Loops over range N using lambda L
+struct Build : public Expr {
+  using Ptr = std::unique_ptr<Build>;
+  Build(Expr::Ptr range, Expr::Ptr var, Expr::Ptr expr)
+      : Expr(Type(Type::Vector, expr->getType()), Kind::Build), range(std::move(range)),
+        var(std::move(var)), expr(std::move(expr)) {}
+
+  Expr *getRange() const { return range.get(); }
+  Expr *getVariable() const { return var.get(); }
+  Expr *getExpr() const { return expr.get(); }
+
+  void dump(size_t tab = 0) const override;
+
+  /// LLVM RTTI
+  static bool classof(const Expr *c) { return c->kind == Kind::Build; }
+
+private:
+  Expr::Ptr range;
+  Expr::Ptr var;
+  Expr::Ptr expr;
+};
+
+/// Index, ex: (index N vector)
+///
+/// Extract the Nth index from a vector
+struct Index : public Expr {
+  using Ptr = std::unique_ptr<Index>;
+  Index(Expr::Ptr index, Expr::Ptr var)
+      : Expr(Type::None, Kind::Index), index(std::move(index)),
+        var(std::move(var)) {
+    assert(this->index->getType() == Type::Integer && "Invalid index type");
+    assert(this->var->getType() == Type::Vector && "Invalid variable type");
+    type = this->var->getType().getSubType();
+  }
+
+  Expr *getIndex() const { return index.get(); }
+  Expr *getVariable() const { return var.get(); }
+
+  void dump(size_t tab = 0) const override;
+
+  /// LLVM RTTI
+  static bool classof(const Expr *c) { return c->kind == Kind::Index; }
+
+private:
+  Expr::Ptr index;
+  Expr::Ptr var;
 };
 
 /// Rule, ex: (rule "mul2" (v : Float) (mul@ff v 2.0) (add v v))
@@ -357,7 +440,7 @@ struct Rule : public Expr {
   using Ptr = std::unique_ptr<Condition>;
   Rule(llvm::StringRef name, Expr::Ptr variable, Expr::Ptr pattern,
        Expr::Ptr result)
-      : Expr(Expr::Type::None, Expr::Kind::Rule), name(name),
+      : Expr(Type::None, Kind::Rule), name(name),
         variable(std::move(variable)), pattern(std::move(pattern)),
         result(std::move(result)) {}
 
@@ -370,7 +453,7 @@ struct Rule : public Expr {
 
   /// LLVM RTTI
   static bool classof(const Expr *c) {
-    return c->kind == Expr::Kind::Rule;
+    return c->kind == Kind::Rule;
   }
 
 private:

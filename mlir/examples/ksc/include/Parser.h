@@ -112,7 +112,7 @@ class Parser {
     return reservedOps.find(name) != reservedOps.end();
   }
   const std::set<std::string > reservedWords{
-      "let", "edef", "def", "if", "rule"
+      "let", "edef", "def", "if", "build", "index", "rule"
   };
   bool isReservedWord(std::string name) const {
     return reservedWords.find(name) != reservedWords.end();
@@ -149,6 +149,8 @@ class Parser {
   Expr::Ptr parseDecl(const Token *tok);
   Expr::Ptr parseDef(const Token *tok);
   Expr::Ptr parseCond(const Token *tok);
+  Expr::Ptr parseBuild(const Token *tok);
+  Expr::Ptr parseIndex(const Token *tok);
   Expr::Ptr parseRule(const Token *tok);
 
 public:

@@ -41,7 +41,7 @@ class Generator {
   std::map<llvm::StringRef, mlir::Value> variables;
 
   // Helpers
-  mlir::Type ConvertType(AST::Expr::Type type);
+  mlir::Type ConvertType(AST::Type type, size_t dim=0);
   mlir::Attribute getAttr(const AST::Expr* op);
 
   // Module level builders
@@ -59,6 +59,8 @@ class Generator {
   mlir::Value buildVariable(const AST::Variable* var);
   void declareVariable(const AST::Variable* var,
                             mlir::Value val = nullptr);
+  mlir::Value buildBuild(const AST::Build* var);
+  mlir::Value buildIndex(const AST::Index* var);
 
 public:
   Generator() : builder(&context), UNK(builder.getUnknownLoc()) { }
