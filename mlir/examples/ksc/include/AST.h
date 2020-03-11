@@ -77,6 +77,10 @@ struct Type {
     assert(type == Tuple);
     return subTypes[idx];
   }
+  llvm::ArrayRef<Type> getSubTypes() const {
+    assert(type == Tuple);
+    return subTypes;
+  }
 
 protected:
   ValidType type;
@@ -103,10 +107,11 @@ struct Expr {
     Build,
     Index,
     Size,
+    Tuple,
+    Get,
     /// Unused below (TODO: Implement those)
     Fold,
     Lambda,
-    Tuple,
     Apply,
     Assert
   };
@@ -434,9 +439,39 @@ private:
   Expr::Ptr expr;
 };
 
+/// Tuple, ex: (tuple 10.0 42 (add@ff 1.0 2.0))
+///
+/// Builds a tuple, inferring the types
+struct Tuple : public Expr {
+  using Ptr = std::unique_ptr<Tuple>;
+  Tuple(std::vector<Expr::Ptr> &&elements)
+      : Expr(Type::None, Kind::Tuple), elements(std::move(elements)) {
+    std::vector<Type> types;
+    for (auto &el: this->elements)
+      types.push_back(el->getType());
+    type = { Type::Tuple, std::move(types) };
+  }
+
+  llvm::ArrayRef<Expr::Ptr> getElements() const { return elements; }
+  Expr *getElement(size_t idx) {
+    assert(idx < elements.size() && "Offset error");
+    return elements[idx].get();
+  }
+  size_t size() const { return elements.size(); }
+
+  void dump(size_t tab = 0) const override;
+
+  /// LLVM RTTI
+  static bool classof(const Expr *c) { return c->kind == Kind::Tuple; }
+
+private:
+  std::vector<Expr::Ptr> elements;
+};
+
 /// Index, ex: (index N vector)
 ///
 /// Extract the Nth index from a vector
+/// Note: index range is [0, N-1]
 struct Index : public Expr {
   using Ptr = std::unique_ptr<Index>;
   Index(Expr::Ptr index, Expr::Ptr var)
@@ -479,6 +514,36 @@ struct Size : public Expr {
 
 private:
   Expr::Ptr var;
+};
+
+/// Get, ex: (get$7$9 tuple)
+///
+/// Extract the Nth index from a vector.
+/// Note: index range is [1, N]
+struct Get : public Expr {
+  using Ptr = std::unique_ptr<Get>;
+  Get(size_t index, size_t max, Expr::Ptr expr)
+      : Expr(Type::None, Kind::Get), index(index), expr(std::move(expr)) {
+    assert(this->expr->getType() == Type::Tuple && "Invalid expriable type");
+    assert(index > 0 && index <= max && "Out of bounds tuple index");
+    type = this->expr->getType().getSubType(index-1);
+  }
+
+  size_t getIndex() const { return index; }
+  Expr *getExpr() const { return expr.get(); }
+  Expr *getElement() const {
+    auto tuple = llvm::dyn_cast<Tuple>(expr.get());
+    return tuple->getElement(index-1);
+  }
+
+  void dump(size_t tab = 0) const override;
+
+  /// LLVM RTTI
+  static bool classof(const Expr *c) { return c->kind == Kind::Get; }
+
+private:
+  size_t index;
+  Expr::Ptr expr;
 };
 
 /// Rule, ex: (rule "mul2" (v : Float) (mul@ff v 2.0) (add v v))

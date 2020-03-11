@@ -227,6 +227,10 @@ Expr::Ptr Parser::parseToken(const Token *tok) {
       return parseIndex(tok);
     } else if (value == "size") {
       return parseSize(tok);
+    } else if (value == "tuple") {
+      return parseTuple(tok);
+    } else if (llvm::StringRef(value).startswith("get$")) {
+      return parseGet(tok);
     } else if (value == "rule") {
       return parseRule(tok);
     }
@@ -436,7 +440,7 @@ Expr::Ptr Parser::parseDef(const Token *tok) {
   const Token *type = tok->getChild(2);
   const Token *args = tok->getChild(3);
   const Token *expr = tok->getChild(4);
-  assert(name->isValue && type->isValue && !args->isValue);
+  assert(name->isValue && !args->isValue);
   vector<Expr::Ptr> arguments;
   // If there is only one child
   if (args->size() && args->getChild(0)->isValue)
@@ -505,6 +509,31 @@ Expr::Ptr Parser::parseSize(const Token *tok) {
   assert(tok->size() == 2);
   auto vector = parseToken(tok->getChild(1));
   return make_unique<Size>(move(vector));
+}
+
+// Tuple, ex: (tuple 10.0 42 (add@ff 1.0 2.0))
+Expr::Ptr Parser::parseTuple(const Token *tok) {
+  assert(tok->size() > 2);
+  assert(tok->getChild(0)->isValue);
+  std::vector<Expr::Ptr> elements;
+  for (auto &c: tok->getTail())
+    elements.push_back(parseToken(c.get()));
+  return make_unique<Tuple>(move(elements));
+}
+
+// Index, ex: (get$7$9 tuple)
+Expr::Ptr Parser::parseGet(const Token *tok) {
+  assert(tok->size() == 2);
+  assert(tok->getChild(0)->isValue);
+  llvm::StringRef get = tok->getChild(0)->getValue();
+  size_t dollar1 = get.find('$');
+  size_t dollar2 = get.find('$', dollar1+1);
+  llvm::StringRef indexStr = get.substr(dollar1+1, dollar2-dollar1-1);
+  llvm::StringRef maxStr = get.substr(dollar2+1);
+  size_t idx = std::atol(indexStr.str().c_str());
+  size_t max = std::atol(maxStr.str().c_str());
+  auto var = parseToken(tok->getChild(1));
+  return make_unique<Get>(idx, max, move(var));
 }
 
 // Rule: (rule "mul2" (v : Float) (mul@ff v 2.0) (add v v))
@@ -648,6 +677,14 @@ void Build::dump(size_t tab) const {
   expr->dump(tab + 4);
 }
 
+void Tuple::dump(size_t tab) const {
+  cout << string(tab, ' ') << "Tuple:" << endl;
+  Expr::dump(tab + 2);
+  cout << string(tab + 2, ' ') << "Values:" << endl;
+  for (auto &el: elements)
+    el->dump(tab + 4);
+}
+
 void Index::dump(size_t tab) const {
   cout << string(tab, ' ') << "Index:" << endl;
   Expr::dump(tab + 2);
@@ -662,6 +699,14 @@ void Size::dump(size_t tab) const {
   Expr::dump(tab + 2);
   cout << string(tab + 2, ' ') << "Vector:" << endl;
   var->dump(tab + 2);
+}
+
+void Get::dump(size_t tab) const {
+  cout << string(tab, ' ') << "Get:" << endl;
+  Expr::dump(tab + 2);
+  cout << string(tab + 2, ' ') << "index [" << index << "]" << endl;
+  cout << string(tab + 2, ' ') << "From:" << endl;
+  expr->dump(tab + 4);
 }
 
 void Rule::dump(size_t tab) const {

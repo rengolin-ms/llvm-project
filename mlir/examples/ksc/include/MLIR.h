@@ -22,6 +22,8 @@ namespace Knossos {
 namespace MLIR {
 
 // MLIR generator
+using Types = llvm::SmallVector<mlir::Type, 4>;
+using Values = llvm::SmallVector<mlir::Value, 4>;
 class Generator {
   // TODO: Make this optional
   const int optimise = 0;
@@ -38,10 +40,10 @@ class Generator {
 
   // Cache for functions and variables
   std::map<llvm::StringRef, mlir::FuncOp> functions;
-  std::map<llvm::StringRef, mlir::Value> variables;
+  std::map<llvm::StringRef, Values> variables;
 
   // Helpers
-  mlir::Type ConvertType(AST::Type type, size_t dim=0);
+  Types ConvertType(const AST::Type &type, size_t dim=0);
   mlir::Attribute getAttr(const AST::Expr* op);
 
   // Module level builders
@@ -50,18 +52,23 @@ class Generator {
   mlir::FuncOp buildDef(const AST::Definition* def);
 
   // Function level builders
-  mlir::Value buildNode(const AST::Expr* node);
-  mlir::Value buildBlock(const AST::Block* block);
-  mlir::Value buildOp(const AST::Operation* op);
-  mlir::Value buildCond(const AST::Condition* cond);
-  mlir::Value buildLet(const AST::Let* let);
-  mlir::Value buildLiteral(const AST::Literal* lit);
-  mlir::Value buildVariable(const AST::Variable* var);
-  void declareVariable(const AST::Variable* var,
-                            mlir::Value val = nullptr);
-  mlir::Value buildBuild(const AST::Build* b);
-  mlir::Value buildIndex(const AST::Index* i);
-  mlir::Value buildSize(const AST::Size* s);
+  Values buildNode(const AST::Expr* node);
+  Values buildBlock(const AST::Block* block);
+  Values buildOp(const AST::Operation* op);
+  Values buildCond(const AST::Condition* cond);
+  Values buildLet(const AST::Let* let);
+  Values buildLiteral(const AST::Literal* lit);
+  Values buildVariable(const AST::Variable* var);
+  void declareVariable(llvm::StringRef name, Values vals);
+  void declareVariable(const AST::Variable* var, Values vals = {});
+  Values buildBuild(const AST::Build* b);
+  Values buildIndex(const AST::Index* i);
+  Values buildSize(const AST::Size* s);
+  Values buildTuple(const AST::Tuple* t);
+  Values buildGet(const AST::Get* g);
+
+  void serialiseArgs(const AST::Definition *def, mlir::Block &entry);
+
 
 public:
   Generator() : builder(&context), UNK(builder.getUnknownLoc()) { }

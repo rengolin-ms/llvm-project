@@ -321,6 +321,34 @@ void test_parser_rule() {
   cout << "    OK\n";
 }
 
+void test_parser_vector_type() {
+  cout << "\n == test_parser_vector_type\n";
+  const Expr::Ptr tree = parse("(edef foo (Vec Float) (Vec Float)) "
+                               "(edef bar (Vec (Vec Float)) (Integer (Vec Float) Float))");
+
+  // Root can have many exprs, here two
+  Block* root = llvm::dyn_cast<Block>(tree.get());
+  assert(root);
+  // Kind is Decl
+  Declaration *foo = llvm::dyn_cast<Declaration>(root->getOperand(0));
+  Declaration *bar = llvm::dyn_cast<Declaration>(root->getOperand(1));
+  assert(foo && bar);
+  // Check vectors were detected properly
+  auto fooTy = foo->getType();
+  assert(fooTy == Type::Vector && fooTy.getSubType() == Type::Float);
+  auto fooArgTy = foo->getArgType(0);
+  assert(fooArgTy == Type::Vector && fooArgTy.getSubType() == Type::Float);
+  auto barTy = bar->getType();
+  assert(barTy == Type::Vector && barTy.getSubType() == Type::Vector);
+  auto barSubTy = barTy.getSubType();
+  assert(barSubTy == Type::Vector && barSubTy.getSubType() == Type::Float);
+  assert(bar->getArgType(0) == Type::Integer);
+  auto barArgTy = bar->getArgType(1);
+  assert(barArgTy == Type::Vector && barArgTy.getSubType() == Type::Float);
+  assert(bar->getArgType(2) == Type::Float);
+  cout << "    OK\n";
+}
+
 void test_parser_build() {
   cout << "\n == test_parser_build\n";
   const Expr::Ptr tree = parse("(build 10 (lam (i : Integer) (add@ii i i))))");
@@ -419,8 +447,8 @@ void test_parser_vector() {
   cout << "    OK\n";
 }
 
-void test_parser_tuple() {
-  cout << "\n == test_parser_tuple\n";
+void test_parser_tuple_type() {
+  cout << "\n == test_parser_tuple_type\n";
   const Expr::Ptr tree = parse("(edef foo (Tuple Float Float) (Tuple Float Float)) "
                                "(edef bar Float (Integer (Tuple Float Float) Float)) "
                                "(edef baz Bool (Tuple Float (Tuple Integer Float)))");
@@ -461,6 +489,48 @@ void test_parser_tuple() {
   cout << "    OK\n";
 }
 
+void test_parser_tuple() {
+  cout << "\n == test_parser_tuple\n";
+  const Expr::Ptr tree = parse("(tuple (add@ff 3.14 2.72) false 42)");
+
+  // Root can have many exprs, here two
+  Block* root = llvm::dyn_cast<Block>(tree.get());
+  assert(root);
+  // Kind is Tuple
+  Tuple* tuple = llvm::dyn_cast<Tuple>(root->getOperand(0));
+  assert(tuple);
+  auto type = tuple->getType();
+  assert(type == Type::Tuple &&
+         type.getSubType(0) == Type::Float &&
+         type.getSubType(1) == Type::Bool &&
+         type.getSubType(2) == Type::Integer);
+  // Check elements are correct
+  Operation* op = llvm::dyn_cast<Operation>(tuple->getElement(0));
+  assert(op->getName() == "add@ff");
+  assert(llvm::dyn_cast<Literal>(op->getOperand(0))->getValue() == "3.14");
+  assert(llvm::dyn_cast<Literal>(op->getOperand(1))->getValue() == "2.72");
+  assert(llvm::dyn_cast<Literal>(tuple->getElement(1))->getValue() == "false");
+  assert(llvm::dyn_cast<Literal>(tuple->getElement(2))->getValue() == "42");
+  cout << "    OK\n";
+}
+
+void test_parser_get() {
+  cout << "\n == test_parser_get\n";
+  const Expr::Ptr tree = parse("(get$2$3 (tuple (add@ff 3.14 2.72) false 42))");
+
+  // Root can have many exprs, here two
+  Block* root = llvm::dyn_cast<Block>(tree.get());
+  assert(root);
+  // Kind is Get
+  Get* get = llvm::dyn_cast<Get>(root->getOperand(0));
+  assert(get);
+  assert(get->getIndex() == 2);
+  Literal* elm = llvm::dyn_cast<Literal>(get->getElement());
+  assert(elm);
+  assert(elm->getType() == Type::Bool && elm->getValue() == "false");
+  cout << "    OK\n";
+}
+
 int test_all(int v=0) {
   verbose = v;
 
@@ -473,11 +543,14 @@ int test_all(int v=0) {
   test_parser_decl_def_use();
   test_parser_cond();
   test_parser_rule();
+  test_parser_vector_type();
   test_parser_build();
   test_parser_index();
   test_parser_size();
   test_parser_vector();
+  test_parser_tuple_type();
   test_parser_tuple();
+  test_parser_get();
 
   cout << "\nAll tests OK\n";
   return 0;

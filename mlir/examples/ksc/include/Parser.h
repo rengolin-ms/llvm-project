@@ -109,10 +109,14 @@ class Parser {
   bool isReservedOp(std::string name) const {
     return reservedOps.find(name) != reservedOps.end();
   }
+  // Note: "get$i$N" is not on the list, as it needs special parsing
   const std::set<std::string > reservedWords{
-      "let", "edef", "def", "if", "build", "index", "size", "rule"
+      "let", "edef", "def", "if", "build", "index", "size", "tuple", "rule"
   };
   bool isReservedWord(std::string name) const {
+    // FIXME: This should really be a regex
+    if (llvm::StringRef(name).startswith("get$"))
+        return true;
     return reservedWords.find(name) != reservedWords.end();
   }
   /// Simple symbol table for parsing only (no validation)
@@ -151,6 +155,8 @@ class Parser {
   Expr::Ptr parseBuild(const Token *tok);
   Expr::Ptr parseIndex(const Token *tok);
   Expr::Ptr parseSize(const Token *tok);
+  Expr::Ptr parseTuple(const Token *tok);
+  Expr::Ptr parseGet(const Token *tok);
   Expr::Ptr parseRule(const Token *tok);
 
 public:
