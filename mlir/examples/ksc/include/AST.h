@@ -258,11 +258,16 @@ private:
 struct Operation : public Expr {
   using Ptr = std::unique_ptr<Operation>;
   Operation(llvm::StringRef name, Type type)
-      : Expr(type, Kind::Operation), name(name) {}
+      : Expr(type, Kind::Operation), name(name) {
+    parseName(name);
+  }
 
   void addOperand(Expr::Ptr op) { operands.push_back(std::move(op)); }
   llvm::ArrayRef<Expr::Ptr> getOperands() const { return operands; }
   llvm::StringRef getName() const { return name; }
+  llvm::StringRef getPrefix() const { return prefix; }
+  llvm::StringRef getRoot() const { return root; }
+  llvm::StringRef getSuffix() const { return suffix; }
   size_t size() const { return operands.size(); }
   Expr *getOperand(size_t idx) const {
     assert(idx < operands.size() && "Offset error");
@@ -277,8 +282,32 @@ struct Operation : public Expr {
   }
 
 private:
+  void parseName(llvm::StringRef name) {
+    size_t dollar = name.find('$');
+    size_t at = name.find('@');
+    size_t rootFrom = 0;
+    size_t rootTo = name.size();
+    bool changed = false;
+    if (dollar != llvm::StringRef::npos) {
+      prefix = name.substr(0, dollar-1).str();
+      rootFrom = dollar+1;
+      changed = true;
+    }
+    if (at != llvm::StringRef::npos) {
+      suffix = name.substr(at+1).str();
+      rootTo = at;
+      changed = true;
+    }
+    if (changed)
+      root = name.substr(rootFrom, rootTo - rootFrom).str();
+    else
+      root = name.str();
+  }
   std::string name;
   std::vector<Expr::Ptr> operands;
+  std::string prefix;
+  std::string root;
+  std::string suffix;
 };
 
 /// Declaration, ex: (edef max Float (Float Float))

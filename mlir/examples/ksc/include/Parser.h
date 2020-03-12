@@ -103,7 +103,7 @@ class Parser {
 
   // Lookup table of reserved operations and keywords
   // Don't use StringRef, as data() doesn't need to be null terminated.
-  // TODO: add all words
+  // FIXME: Knossos declares all of those, we need a runtime library
   const std::set<std::string> reservedOps{
       "add@ii", "sub@ii", "mul@ii", "div@ii",
       "add@ff", "sub@ff", "mul@ff", "div@ff"

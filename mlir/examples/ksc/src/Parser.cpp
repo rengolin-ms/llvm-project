@@ -210,7 +210,6 @@ Expr::Ptr Parser::parseToken(const Token *tok) {
     return parseCall(tok);
 
   // Variable declaration/definition
-  // TODO: Do variables always start with letters?
   if (!isLiteralOrType(value) && !variables.exists(value))
     return parseVariable(tok);
 
@@ -525,7 +524,13 @@ void Let::dump(size_t tab) const {
 
 void Operation::dump(size_t tab) const {
   cout << string(tab, ' ') << "Operation:" << endl;
-  cout << string(tab + 2, ' ') << "name [" << name << "]" << endl;
+  cout << string(tab + 2, ' ') << "name [";
+  if (!prefix.empty())
+    cout << prefix << "$";
+  cout << root;
+  if (!suffix.empty())
+    cout << "@" << suffix;
+  cout << "]" << endl;
   Expr::dump(tab + 2);
   for (auto &op : operands)
     op->dump(tab + 2);
