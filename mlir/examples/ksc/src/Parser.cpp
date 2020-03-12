@@ -409,17 +409,6 @@ Expr::Ptr Parser::parseCond(const Token *tok) {
   auto c = parseToken(tok->getChild(1));
   auto i = parseToken(tok->getChild(2));
   auto e = parseToken(tok->getChild(3));
-
-  // LLVM doesn't support constant conditions, so we only emit the if/else block
-  auto lit = llvm::dyn_cast<Literal>(c.get());
-  if (lit) {
-    if (lit->getValue() == "true")
-      return i;
-    else
-      return e;
-  }
-
-  // Non-literal conditions split in diamond pattern
   return make_unique<Condition>(move(c), move(i), move(e));
 }
 

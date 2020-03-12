@@ -256,32 +256,24 @@ mlir::Value Generator::buildLet(const AST::Let* let) {
   return mlir::Value();
 }
 
-// Builds conditions, create new basic blocks
+// Builds conditions using select
 mlir::Value Generator::buildCond(const AST::Condition* cond) {
+
+  // Constant booleans aren't allowed on selects / cond_branch in LLVM
+  auto lit = llvm::dyn_cast<AST::Literal>(cond->getCond());
+  if (lit) {
+    if (lit->getValue() == "true")
+      return buildNode(cond->getIfBlock());
+    else
+      return buildNode(cond->getElseBlock());
+  }
+
   // Check for the boolean result of the conditional block
-  auto condValue = buildNode(cond->getCond());
-
-  // Create all basic blocks and the condition
-  auto ifBlock = currentFunc.addBlock();
-  auto elseBlock = currentFunc.addBlock();
-  auto tailBlock = currentFunc.addBlock();
-  mlir::ValueRange emptyArgs;
-  builder.create<mlir::CondBranchOp>(UNK, condValue, ifBlock, emptyArgs, elseBlock, emptyArgs);
-
-  // Lower if/else in their respective blocks
-  builder.setInsertionPointToStart(ifBlock);
-  auto ifValue = buildNode(cond->getIfBlock());
-  builder.create<mlir::BranchOp>(UNK, tailBlock, ifValue);
-
-  builder.setInsertionPointToStart(elseBlock);
-  auto elseValue = buildNode(cond->getElseBlock());
-  builder.create<mlir::BranchOp>(UNK, tailBlock, elseValue);
-
-  // Merge the two blocks into a value and return
-  assert(ifValue.getType() == elseValue.getType() && "Type mismatch");
-  tailBlock->addArgument(ifValue.getType());
-  builder.setInsertionPointToEnd(tailBlock);
-  return tailBlock->getArgument(0);
+  auto i = buildNode(cond->getIfBlock());
+  auto e = buildNode(cond->getElseBlock());
+  auto c = buildNode(cond->getCond());
+  assert(i.getType() == e.getType() && "Type mismatch");
+  return builder.create<mlir::SelectOp>(UNK, c, i, e);
 }
 
 // Builds loops creating vectors [WIP]
