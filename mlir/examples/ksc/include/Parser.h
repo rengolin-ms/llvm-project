@@ -21,10 +21,6 @@ namespace AST {
 /// Non-Values are lets, def/decl, ops, calls, control flow
 ///
 /// Do not confuse with "continuation values", those are higher level.
-///
-/// Using raw pointers instead of shared because I think it should be unique
-/// but the ownership model can be a little confusing, so making it simple
-/// for now and deleting the pointers on exit.
 struct Token {
   using Ptr = std::unique_ptr<Token>;
   Token(std::string str) : isValue(true), value(str) {}
