@@ -337,7 +337,7 @@ void test_parser_index() {
   // Root can have many exprs, here only one
   Block* root = llvm::dyn_cast<Block>(tree.get());
   assert(root);
-  // Kind is Build
+  // Kind is Index
   Index* index = llvm::dyn_cast<Index>(root->getOperand(0));
   assert(index);
   // Build has two parts: index definition and vector
@@ -349,6 +349,76 @@ void test_parser_index() {
   Expr* v = index->getVariable();
   assert(v->getType() == Type::Vector);
   assert(v->getType().getSubType() == Type::Integer);
+  cout << "    OK\n";
+}
+
+void test_parser_vector() {
+  cout << "\n == test_parser_vector\n";
+  const Expr::Ptr tree = parse("(edef foo (Vec Float) (Vec Float)) "
+                               "(edef bar (Vec (Vec Float)) (Integer (Vec Float) Float))");
+
+  // Root can have many exprs, here two
+  Block* root = llvm::dyn_cast<Block>(tree.get());
+  assert(root);
+  // Kind is Decl
+  Declaration *foo = llvm::dyn_cast<Declaration>(root->getOperand(0));
+  Declaration *bar = llvm::dyn_cast<Declaration>(root->getOperand(1));
+  assert(foo && bar);
+  // Check vectors were detected properly
+  auto fooTy = foo->getType();
+  assert(fooTy == Type::Vector && fooTy.getSubType() == Type::Float);
+  auto fooArgTy = foo->getArgType(0);
+  assert(fooArgTy == Type::Vector && fooArgTy.getSubType() == Type::Float);
+  auto barTy = bar->getType();
+  assert(barTy == Type::Vector && barTy.getSubType() == Type::Vector);
+  auto barSubTy = barTy.getSubType();
+  assert(barSubTy == Type::Vector && barSubTy.getSubType() == Type::Float);
+  assert(bar->getArgType(0) == Type::Integer);
+  auto barArgTy = bar->getArgType(1);
+  assert(barArgTy == Type::Vector && barArgTy.getSubType() == Type::Float);
+  assert(bar->getArgType(2) == Type::Float);
+  cout << "    OK\n";
+}
+
+void test_parser_tuple() {
+  cout << "\n == test_parser_tuple\n";
+  const Expr::Ptr tree = parse("(edef foo (Tuple Float Float) (Tuple Float Float)) "
+                               "(edef bar Float (Integer (Tuple Float Float) Float)) "
+                               "(edef baz Bool (Tuple Float (Tuple Integer Float)))");
+
+  // Root can have many exprs, here two
+  Block* root = llvm::dyn_cast<Block>(tree.get());
+  assert(root);
+  // Kind is Decl
+  Declaration *foo = llvm::dyn_cast<Declaration>(root->getOperand(0));
+  Declaration *bar = llvm::dyn_cast<Declaration>(root->getOperand(1));
+  Declaration *baz = llvm::dyn_cast<Declaration>(root->getOperand(2));
+  assert(foo && bar && baz);
+  // Check vectors were detected properly
+  auto fooTy = foo->getType();
+  assert(fooTy == Type::Tuple && fooTy.getSubType(0) == Type::Float);
+  auto fooArgTy = foo->getArgType(0);
+  assert(fooArgTy == Type::Tuple &&
+         fooArgTy.getSubType(0) == Type::Float &&
+         fooArgTy.getSubType(1) == Type::Float);
+  auto barTy = bar->getType();
+  assert(barTy == Type::Float);
+  assert(bar->getArgType(0) == Type::Integer);
+  auto barArgTy = bar->getArgType(1);
+  assert(barArgTy == Type::Tuple &&
+         barArgTy.getSubType(0) == Type::Float &&
+         barArgTy.getSubType(1) == Type::Float);
+  assert(bar->getArgType(2) == Type::Float);
+  auto bazTy = baz->getType();
+  assert(bazTy == Type::Bool);
+  auto bazArgTy = baz->getArgType(0);
+  assert(bazArgTy == Type::Tuple &&
+         bazArgTy.getSubType(0) == Type::Float &&
+         bazArgTy.getSubType(1) == Type::Tuple);
+  auto bazSubArgTy = bazArgTy.getSubType(1);
+  assert(bazSubArgTy == Type::Tuple &&
+         bazSubArgTy.getSubType(0) == Type::Integer &&
+         bazSubArgTy.getSubType(1) == Type::Float);
   cout << "    OK\n";
 }
 
@@ -398,6 +468,8 @@ int test_all(int v=0) {
   test_parser_cond();
   test_parser_build();
   test_parser_index();
+  test_parser_vector();
+  test_parser_tuple();
 
   test_llvm_ir();
 

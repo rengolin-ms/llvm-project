@@ -43,10 +43,10 @@ struct Type {
 
   /// Scalar constructor
   Type(ValidType type) : type(type) {
-    assert(type >= None && type <= LAST_SCALAR && "Wrong ctor");
+    assert(isScalar() && "Wrong ctor");
   }
   /// Vector constructor
-  Type(ValidType type, ValidType subTy) : type(type) {
+  Type(ValidType type, Type subTy) : type(type) {
     assert(type == Vector && "Wrong ctor");
     subTypes.push_back(subTy);
   }
@@ -55,17 +55,25 @@ struct Type {
     assert(type == Tuple && subTys.size() > 1 && "Wrong ctor");
     subTypes = std::move(subTys);
   }
+  /// Utilities
+  bool isScalar() const {
+    return type >= None && type <= LAST_SCALAR;
+  }
   operator ValidType() const { return type; }
   bool operator ==(ValidType oTy) const {
     return type == oTy;
   }
+  static bool isScalar(ValidType type) {
+    return type >= None && type <= LAST_SCALAR;
+  }
+  void dump() const;
   // Vector accessor
-  ValidType getSubType() const {
+  const Type &getSubType() const {
     assert(type == Vector);
     return subTypes[0];
   }
   // Tuple accessor
-  ValidType getSubType(size_t idx) const {
+  const Type &getSubType(size_t idx) const {
     assert(type == Tuple);
     return subTypes[idx];
   }

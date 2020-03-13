@@ -136,6 +136,7 @@ class Parser {
   // Build AST nodes from Tokens
   Expr::Ptr parseToken(const Token *tok);
   // Specific Token parsers
+  Type parseType(const Token *tok);
   Expr::Ptr parseBlock(const Token *tok);
   Expr::Ptr parseValue(const Token *tok);
   Expr::Ptr parseCall(const Token *tok);

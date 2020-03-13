@@ -8,7 +8,7 @@ using namespace Knossos::AST;
 
 //================================================ Helpers
 
-static Type Str2Type(llvm::StringRef ty) {
+static Type::ValidType Str2Type(llvm::StringRef ty) {
   if (ty == "String")
     return Type::String;
   if (ty == "Bool")
@@ -28,7 +28,7 @@ static Type Str2Type(llvm::StringRef ty) {
   return Type::None;
 }
 
-static const string Type2Str(Type type) {
+static const string Type2Str(Type::ValidType type) {
   switch (type) {
   case Type::None:
     return "none";
@@ -226,6 +226,32 @@ Expr::Ptr Parser::parseBlock(const Token *tok) {
   return unique_ptr<Expr>(b);
 }
 
+// Parses type declarations (vector, tuples)
+Type Parser::parseType(const Token *tok) {
+  if (tok->isValue)
+    return Type(Str2Type(tok->getValue()));
+
+  auto type = Str2Type(tok->getChild(0)->getValue());
+  if (type == AST::Type::Vector) {
+    auto element = tok->getChild(1);
+    if (element->isValue) // Vector of scalar
+      return Type(type, Str2Type(element->getValue()));
+    else                  // Vector of vector
+      return Type(type, parseType(element));
+  }
+  if (type == AST::Type::Tuple) {
+    std::vector<Type> types;
+    for (auto &c: tok->getTail()) {
+      if (c->isValue)
+        types.push_back(Str2Type(c->getValue()));
+      else
+        types.push_back(parseType(c.get()));
+    }
+    return Type(type, move(types));
+  }
+  assert(0 && "Invalid type");
+}
+
 // Values (variable names, literals, type names)
 Expr::Ptr Parser::parseValue(const Token *tok) {
   assert(tok->isValue);
@@ -296,7 +322,7 @@ Expr::Ptr Parser::parseVariable(const Token *tok) {
   string value = children[0]->getValue().str();
   // Variable declaration: (name : Type) : add name to SymbolTable
   if (tok->size() == 3 && children[1]->getValue() == ":") {
-    Type type = Str2Type(children[2]->getValue());
+    Type type = parseType(children[2].get());
     assert(type != Type::None);
     auto var = unique_ptr<Variable>(new Variable(value, type));
     variables.add(value, var.get());
@@ -347,17 +373,24 @@ Expr::Ptr Parser::parseLet(const Token *tok) {
 Expr::Ptr Parser::parseDecl(const Token *tok) {
   assert(tok->size() == 4);
   const Token *name = tok->getChild(1);
-  const Token *type = tok->getChild(2);
+  const Token *ty = tok->getChild(2);
   const Token *args = tok->getChild(3);
-  assert(name->isValue && type->isValue);
+  assert(name->isValue);
+  auto type = parseType(ty);
   assert(!args->isValue);
 
   auto decl =
-      make_unique<Declaration>(name->getValue(), Str2Type(type->getValue()));
+      make_unique<Declaration>(name->getValue(), type);
   assert(decl);
   assert(!args->isValue);
-  for (auto &c : args->getChildren())
-    decl->addArgType(Str2Type(c->getValue()));
+  // Vector and Tuples can be declared bare
+  if (args->getChild(0)->isValue &&
+      !Type::isScalar(Str2Type(args->getChild(0)->getValue())))
+    decl->addArgType(parseType(args));
+  else
+    for (auto &c : args->getChildren())
+      decl->addArgType(parseType(c.get()));
+
   functions.add(name->getValue().str(), decl.get());
   assert(functions.exists(name->getValue().str()));
   return decl;
@@ -388,7 +421,7 @@ Expr::Ptr Parser::parseDef(const Token *tok) {
     body = make_unique<Block>(move(body));
 
   auto node = make_unique<Definition>(name->getValue(),
-                                      Str2Type(type->getValue()), move(body));
+                                      parseType(type), move(body));
   assert(node);
   assert(!args->isValue);
   for (auto &arg : arguments)
@@ -468,8 +501,27 @@ void Token::dump(size_t tab) const {
   cout << string(tab, ' ') << "exit\n";
 }
 
+void Type::dump() const {
+  if (type == Vector) {
+    cout << "Vector( ";
+    subTypes[0].dump();
+    cout << " )";
+  } else if (type == Tuple) {
+    cout << "Tuple{ ";
+    for (auto &t: subTypes) {
+      t.dump();
+      cout << " ";
+    }
+    cout << "}";
+  } else {
+    cout << Type2Str(type);
+  }
+}
+
 void Expr::dump(size_t tab) const {
-  cout << string(tab, ' ') << "type [" << Type2Str(type) << "]" << endl;
+  cout << string(tab, ' ') << "type [";
+  type.dump();
+  cout << "]" << endl;
 }
 
 void Block::dump(size_t tab) const {
@@ -520,8 +572,10 @@ void Declaration::dump(size_t tab) const {
   cout << string(tab + 2, ' ') << "name [" << name << "]" << endl;
   Expr::dump(tab + 2);
   cout << string(tab + 2, ' ') << "Types: [ ";
-  for (auto ty : argTypes)
-    cout << Type2Str(ty) << " ";
+  for (auto ty : argTypes) {
+    ty.dump();
+    cout << " ";
+  }
   cout << "]" << endl;
 }
 

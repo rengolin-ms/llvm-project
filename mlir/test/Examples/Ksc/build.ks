@@ -25,9 +25,9 @@
 ; AST-NEXT:    type [Integer]
 ; AST-NEXT:    Variable:
 ; AST-NEXT:      name [v]
-; AST-NEXT:      type [Vec]
+; AST-NEXT:      type [Vector( Integer )]
 ; AST-NEXT:      Build:
-; AST-NEXT:        type [Vec]
+; AST-NEXT:        type [Vector( Integer )]
 ; AST-NEXT:        Range:
 ; AST-NEXT:        Literal:
 ; AST-NEXT:          value [10]
@@ -87,7 +87,7 @@
 ; AST-NEXT:      Vector:
 ; AST-NEXT:      Variable:
 ; AST-NEXT:        name [v]
-; AST-NEXT:        type [Vec]
+; AST-NEXT:        type [Vector( Integer )]
 ; MLIR:       ^[[tailBB]]: // pred: ^[[headBB]]
 ; MLIR:         %[[five:[ci_0-9]+]] = constant 5 : i64
 ; MLIR:         %[[idxR:[0-9]+]] = index_cast %c5_i64 : i64 to index
