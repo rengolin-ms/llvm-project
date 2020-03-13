@@ -231,13 +231,8 @@ Expr::Ptr Parser::parseValue(const Token *tok) {
   assert(tok->isValue);
   string value = tok->getValue().str();
 
-  // Type names: Integer, Float, Bool, String...
-  Type ty = Str2Type(value);
-  if (ty != Type::None) {
-    return unique_ptr<Expr>(new TypeDecl(ty));
-  }
   // Literals: 10.0 42 "Hello" (not hello, that's a variable use)
-  ty = LiteralType(value);
+  Type ty = LiteralType(value);
   if (ty != Type::None) {
     // Trim quotes "" from strings before creating constant
     if (ty == Type::String)
@@ -481,11 +476,6 @@ void Block::dump(size_t tab) const {
   cout << string(tab, ' ') << "Block:" << endl;
   for (auto &op : operands)
     op->dump(tab + 2);
-}
-
-void TypeDecl::dump(size_t tab) const {
-  cout << string(tab, ' ') << "TypeDecl:" << endl;
-  Expr::dump(tab + 2);
 }
 
 void Literal::dump(size_t tab) const {

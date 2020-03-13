@@ -147,21 +147,6 @@ private:
   std::vector<Expr::Ptr> operands;
 };
 
-/// Type declaration, ex: Float, String, Bool
-///
-/// These are constant immutable objects. If no type match,
-/// the type remains None and this is not a type.
-struct TypeDecl : public Expr {
-  using Ptr = std::unique_ptr<TypeDecl>;
-  TypeDecl(Type type)
-      : Expr(type, Kind::Type) {}
-
-  void dump(size_t tab = 0) const override;
-
-  /// LLVM RTTI
-  static bool classof(const Expr *c) { return c->kind == Kind::Type; }
-};
-
 /// Literals, ex: "Hello", 10.0, 123, false
 ///
 /// These are constant immutable objects.
