@@ -352,6 +352,20 @@ void test_parser_index() {
   cout << "    OK\n";
 }
 
+void test_parser_size() {
+  cout << "\n == test_parser_size\n";
+  const Expr::Ptr tree = parse("(size (build 10 (lam (i : Integer) i)))");
+
+  // Root can have many exprs, here only one
+  Block* root = llvm::dyn_cast<Block>(tree.get());
+  assert(root);
+  // Kind is Size
+  Size* size = llvm::dyn_cast<Size>(root->getOperand(0));
+  assert(size);
+  assert(size->getType() == Type::Integer);
+  cout << "    OK\n";
+}
+
 void test_parser_vector() {
   cout << "\n == test_parser_vector\n";
   const Expr::Ptr tree = parse("(edef foo (Vec Float) (Vec Float)) "
@@ -468,6 +482,7 @@ int test_all(int v=0) {
   test_parser_cond();
   test_parser_build();
   test_parser_index();
+  test_parser_size();
   test_parser_vector();
   test_parser_tuple();
 

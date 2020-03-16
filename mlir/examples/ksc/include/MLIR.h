@@ -59,8 +59,9 @@ class Generator {
   mlir::Value buildVariable(const AST::Variable* var);
   void declareVariable(const AST::Variable* var,
                             mlir::Value val = nullptr);
-  mlir::Value buildBuild(const AST::Build* var);
-  mlir::Value buildIndex(const AST::Index* var);
+  mlir::Value buildBuild(const AST::Build* b);
+  mlir::Value buildIndex(const AST::Index* i);
+  mlir::Value buildSize(const AST::Size* s);
 
 public:
   Generator() : builder(&context), UNK(builder.getUnknownLoc()) { }

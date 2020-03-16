@@ -175,6 +175,8 @@ mlir::Value Generator::buildNode(const AST::Expr* node) {
     return buildBuild(llvm::dyn_cast<AST::Build>(node));
   if (AST::Index::classof(node))
     return buildIndex(llvm::dyn_cast<AST::Index>(node));
+  if (AST::Size::classof(node))
+    return buildSize(llvm::dyn_cast<AST::Size>(node));
   // TODO: Implement all node types
   assert(0 && "unexpected node");
 }
@@ -343,6 +345,16 @@ mlir::Value Generator::buildIndex(const AST::Index* i) {
   auto indIdx = builder.create<mlir::IndexCastOp>(UNK, idx, indTy);
   mlir::ValueRange rangeIdx {indIdx};
   return builder.create<mlir::LoadOp>(UNK, vec, rangeIdx);
+}
+
+// Builds size of vector operator
+mlir::Value Generator::buildSize(const AST::Size* s) {
+  auto var = llvm::dyn_cast<AST::Variable>(s->getVariable());
+  auto vec = variables[var->getName()];
+  // FIXME: Support multi-dimensional vectors
+  auto dim = builder.create<mlir::DimOp>(UNK, vec, 0);
+  auto intTy = builder.getIntegerType(64);
+  return builder.create<mlir::IndexCastOp>(UNK, dim, intTy);
 }
 
 // Lower constant literals

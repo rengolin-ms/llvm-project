@@ -20,7 +20,7 @@
 ; LLVM: define i64 @main(i64 %0) {
 
 ; Creating a 10-element vector of integers, from 0 to 9
-(let (v (build 10 (lam (i : Integer) (add@ii i argc)))) (index 5 v))
+(let (v (build 10 (lam (i : Integer) (add@ii i argc)))) (add@ii (size v) (index 5 v)))
 ; AST:       Let:
 ; AST-NEXT:    type [Integer]
 ; AST-NEXT:    Variable:
@@ -78,6 +78,15 @@
 ; LLVM:         %[[incr]] = add i64 %[[bodyPHI]], 1
 ; LLVM:         br label %[[headBB]]
 
+; AST-NEXT:  Operation:
+; AST-NEXT:    name [add@ii]
+; AST-NEXT:    type [Integer]
+; AST-NEXT:    Size:
+; AST-NEXT:      type [Integer]
+; AST-NEXT:      Vector:
+; AST-NEXT:      Variable:
+; AST-NEXT:        name [v]
+; AST-NEXT:        type [Vector( Integer )]
 ; AST-NEXT:    Index:
 ; AST-NEXT:      type [Integer]
 ; AST-NEXT:      Value:
@@ -89,12 +98,16 @@
 ; AST-NEXT:        name [v]
 ; AST-NEXT:        type [Vector( Integer )]
 ; MLIR:       ^[[tailBB]]: // pred: ^[[headBB]]
+; MLIR:         %[[dim:[0-9]+]] = dim %[[vec]], 0 : memref<10xi64>
+; MLIR:         %[[dimcast:[0-9]+]] = index_cast %[[dim]] : index to i64
 ; MLIR:         %[[five:[ci_0-9]+]] = constant 5 : i64
 ; MLIR:         %[[idxR:[0-9]+]] = index_cast %c5_i64 : i64 to index
-; MLIR:         %[[ret:[0-9]+]] = load %[[vec]][%[[idxR]]] : memref<10xi64>
+; MLIR:         %[[idx:[0-9]+]] = load %[[vec]][%[[idxR]]] : memref<10xi64>
+; MLIR:         %[[ret:[0-9]+]] = addi %[[dimcast]], %[[idx]] : i64
 ; LLVM:       [[tailBB]]:                                               ; preds = %[[headBB]]
 ; LLVM:         %[[ptrR:[0-9]+]] = getelementptr i64, i64* %{{.*}}, i64 5
-; LLVM:         %[[ret:[0-9]+]] = load i64, i64* %[[ptrR]]
+; LLVM:         %[[idx:[0-9]+]] = load i64, i64* %[[ptrR]]
+; LLVM:         %[[ret:[0-9]+]] = add i64 10, %[[idx]]
 
 ))
 ; AST does not return anything

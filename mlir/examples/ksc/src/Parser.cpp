@@ -223,6 +223,8 @@ Expr::Ptr Parser::parseToken(const Token *tok) {
       return parseBuild(tok);
     } else if (value == "index") {
       return parseIndex(tok);
+    } else if (value == "size") {
+      return parseSize(tok);
     } else if (value == "rule") {
       return parseRule(tok);
     }
@@ -499,6 +501,13 @@ Expr::Ptr Parser::parseIndex(const Token *tok) {
   return make_unique<Index>(move(index), move(vector));
 }
 
+// Size, ex: (size vector)
+Expr::Ptr Parser::parseSize(const Token *tok) {
+  assert(tok->size() == 2);
+  auto vector = parseToken(tok->getChild(1));
+  return make_unique<Size>(move(vector));
+}
+
 // Rule: (rule "mul2" (v : Float) (mul@ff v 2.0) (add v v))
 Expr::Ptr Parser::parseRule(const Token *tok) {
   assert(tok->size() == 5);
@@ -645,6 +654,13 @@ void Index::dump(size_t tab) const {
   Expr::dump(tab + 2);
   cout << string(tab + 2, ' ') << "Value:" << endl;
   index->dump(tab + 2);
+  cout << string(tab + 2, ' ') << "Vector:" << endl;
+  var->dump(tab + 2);
+}
+
+void Size::dump(size_t tab) const {
+  cout << string(tab, ' ') << "Size:" << endl;
+  Expr::dump(tab + 2);
   cout << string(tab + 2, ' ') << "Vector:" << endl;
   var->dump(tab + 2);
 }

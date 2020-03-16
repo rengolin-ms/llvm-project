@@ -102,6 +102,7 @@ struct Expr {
     Rule,
     Build,
     Index,
+    Size,
     /// Unused below (TODO: Implement those)
     Fold,
     Lambda,
@@ -451,6 +452,27 @@ struct Index : public Expr {
 
 private:
   Expr::Ptr index;
+  Expr::Ptr var;
+};
+
+/// Size, ex: (index N vector)
+///
+/// Extract the Nth index from a vector
+struct Size : public Expr {
+  using Ptr = std::unique_ptr<Size>;
+  Size(Expr::Ptr var)
+      : Expr(Type::Integer, Kind::Size), var(std::move(var)) {
+    assert(this->var->getType() == Type::Vector && "Invalid variable type");
+  }
+
+  Expr *getVariable() const { return var.get(); }
+
+  void dump(size_t tab = 0) const override;
+
+  /// LLVM RTTI
+  static bool classof(const Expr *c) { return c->kind == Kind::Size; }
+
+private:
   Expr::Ptr var;
 };
 
