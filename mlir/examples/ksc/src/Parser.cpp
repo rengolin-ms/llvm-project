@@ -105,6 +105,35 @@ size_t Lexer::lexToken(Token *tok, size_t pos) {
         while (code[pos] != '\n')
           tokenStart = ++pos;
         break;
+      case '#':
+        if (code[pos+1] != '|')
+          break;
+        assert(multiLineComments == 0);
+        pos += 2; // consume #|
+        multiLineComments = 1;
+        // Multi-line comment
+        while (multiLineComments) {
+          switch (code[pos]) {
+            case '|':
+              if (code[pos+1] == '#') {
+                multiLineComments--;
+                pos++;
+              }
+              pos++;
+              break;
+            case '#':
+              if (code[pos+1] == '|') {
+                multiLineComments++;
+                pos++;
+              }
+              pos++;
+              break;
+            default:
+              pos++;
+          }
+        }
+        tokenStart = pos;
+        break;
       case ' ':
         // Spaces are allowed inside strings
         if (isInString) {

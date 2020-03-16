@@ -72,18 +72,20 @@ class Lexer {
   std::string code;
   size_t len;
   Token::Ptr root;
+  size_t multiLineComments;
 
   /// Build a tree of tokens
   size_t lexToken(Token *tok, size_t pos);
 
 public:
   Lexer(std::string &&code)
-      : code(code), len(code.size()), root(new Token()) {
+      : code(code), len(code.size()), root(new Token()), multiLineComments(0) {
     assert(len > 0 && "Empty code?");
   }
 
   Token::Ptr lex() {
     lexToken(root.get(), 0);
+    assert(multiLineComments == 0);
     return std::move(root);
   }
 };
@@ -151,7 +153,8 @@ class Parser {
   Expr::Ptr parseRule(const Token *tok);
 
 public:
-  Parser(std::string code) : lex(std::move(code)) { }
+  Parser(std::string code)
+      : rootT(nullptr), rootE(nullptr), lex(std::move(code)) {}
 
   void tokenise() {
     assert(!rootT && "Won't overwrite root token");
