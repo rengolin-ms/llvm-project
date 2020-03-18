@@ -11,6 +11,13 @@ using namespace std;
 // FIXME: Use gtest or similar
 int test_all(int v=0);
 
+// Simple source selection based table
+enum class Source {
+  NONE,
+  KSC,
+  MLIR
+};
+
 // Simple action based table
 enum class Action {
   NONE,
@@ -74,8 +81,18 @@ int main(int argc, char **argv) {
     help();
     return 1;
   }
-  string filename(argv[2]);
-  ifstream file(filename);
+  auto source = Source::NONE;
+  llvm::StringRef filename(argv[2]);
+  if (filename.endswith(".ks"))
+    source = Source::KSC;
+  else if (filename.endswith(".mlir"))
+    source = Source::MLIR;
+  else {
+    cerr << "ERROR: Unknown source file " << filename.str()
+         << ". Must be [ks, mlir]\n";
+    return 1;
+  }
+  ifstream file(filename.str());
   if (!file.is_open()) {
     cout << "Invalid filename!\n";
     help();
@@ -87,19 +104,26 @@ int main(int argc, char **argv) {
 
   // Parse and output AST if requested
   Parser p(code);
-  p.parse();
-  if (!p.getRootNode()) {
-    cerr << "ERROR: AST lowering failed\n";
-    return 1;
-  }
-  if (action == Action::EMIT_AST) {
-    p.getRootNode()->dump();
-    return 0;
+  if (source == Source::KSC) {
+    p.parse();
+    if (!p.getRootNode()) {
+      cerr << "ERROR: AST lowering failed\n";
+      return 1;
+    }
+    if (action == Action::EMIT_AST) {
+      p.getRootNode()->dump();
+      return 0;
+    }
   }
 
   // Call generator and print output (MLIR/LLVM)
   Generator g;
-  auto module = g.build(p.getRootNode());
+  mlir::ModuleOp module;
+  if (source == Source::KSC)
+    module = g.build(p.getRootNode());
+  else if (source == Source::MLIR)
+    module = g.build(code);
+
   if (!module) {
     cerr << "ERROR: MLIR lowering failed\n";
     return 1;

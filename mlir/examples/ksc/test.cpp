@@ -196,9 +196,7 @@ void test_parser_def() {
   assert(def->size() == 2);
   Variable* x = llvm::dyn_cast<Variable>(def->getArgument(0));
   assert(x->getType() == Type::Integer);
-  Block* body = llvm::dyn_cast<Block>(def->getImpl());
-  assert(body);
-  Operation* expr = llvm::dyn_cast<Operation>(body->getOperand(0));
+  Operation* expr = llvm::dyn_cast<Operation>(def->getImpl());
   assert(expr);
   assert(expr->getName() == "add@ii");
   assert(expr->getType() == Type::Integer);
@@ -229,9 +227,7 @@ void test_parser_decl_def_use() {
   assert(main->getType() == Type::Integer);
   assert(main->size() == 0);
   // And its implementation
-  Block* body = llvm::dyn_cast<Block>(main->getImpl());
-  assert(body);
-  Operation* impl = llvm::dyn_cast<Operation>(body->getOperand(0));
+  Operation* impl = llvm::dyn_cast<Operation>(main->getImpl());
   assert(impl);
   assert(impl->getName() == "add@ii");
   assert(impl->getType() == Type::Integer);
@@ -293,6 +289,35 @@ void test_parser_cond() {
   assert(op1);
   assert(op1->getValue() == "10");
   assert(op1->getType() == Type::Integer);
+  cout << "    OK\n";
+}
+
+void test_parser_rule() {
+  cout << "\n == test_parser_rule\n";
+  const Expr::Ptr tree = parse("((rule \"mul2\" (v : Float) (mul@ff v 2.0) (add@ff v v)))");
+
+  // Root can have many exprs, here only 3
+  Block* root = llvm::dyn_cast<Block>(tree.get());
+  assert(root);
+  // Kind is Rule
+  Rule* rule = llvm::dyn_cast<Rule>(root->getOperand(0));
+  assert(rule);
+  // Check name and variable
+  assert(rule->getName() == "mul2");
+  Variable *var = llvm::dyn_cast<Variable>(rule->getExpr());
+  assert(var);
+  assert(var->getName() == "v");
+  assert(var->getType() == Type::Float);
+  // From/To patterns
+  Operation *from = llvm::dyn_cast<Operation>(rule->getPattern());
+  Operation *to = llvm::dyn_cast<Operation>(rule->getResult());
+  assert(from && to);
+  assert(from->getName() == "mul@ff");
+  assert(from->getType() == Type::Float);
+  assert(from->size() == 2);
+  assert(to->getName() == "add@ff");
+  assert(to->getType() == Type::Float);
+  assert(to->size() == 2);
   cout << "    OK\n";
 }
 
@@ -436,39 +461,6 @@ void test_parser_tuple() {
   cout << "    OK\n";
 }
 
-// ======================================================= MLIR / LLVM IR tests
-
-void test_llvm_ir() {
-  cout << "\n == test_llvm_ir_from_ksc\n";
-  build("(edef print Float (Float))"
-        "(def fun Integer ((x : Integer) (y : Float))"
-        "                 ((mul@ff y 1.5) (add@ii x 10)))"
-        "(def main Integer () (fun 42 10.0)",
-        /*from MLIR=*/false, /*to LLVM IR=*/true);
-  cout << "    OK\n";
-
-  cout << "\n == test_llvm_ir_from_mlir\n";
-  build(
-"module {"
-"  func @print(f64) -> f64"
-"  func @fun(%arg0: i64, %arg1: f64) -> i64 {"
-"    %0 = \"std.constant\"() {value = 1.500000e+00 : f64} : () -> f64"
-"    %1 = \"std.mulf\"(%arg1, %0) : (f64, f64) -> f64"
-"    %2 = \"std.constant\"() {value = 10 : i64} : () -> i64"
-"    %3 = \"std.addi\"(%arg0, %2) : (i64, i64) -> i64"
-"    \"std.return\"(%3) : (i64) -> ()"
-"  }"
-"  func @main() -> i64 {"
-"    %0 = \"std.constant\"() {value = 42 : i64} : () -> i64"
-"    %1 = \"std.constant\"() {value = 1.000000e+01 : f64} : () -> f64"
-"    %2 = \"std.call\"(%0, %1) {callee = @fun} : (i64, f64) -> i64"
-"    \"std.return\"(%2) : (i64) -> ()"
-"  }"
-"}", /*from MLIR=*/true, /*to LLVM IR=*/true);
-  cout << "    OK\n";
-}
-
-
 int test_all(int v=0) {
   verbose = v;
 
@@ -480,13 +472,12 @@ int test_all(int v=0) {
   test_parser_def();
   test_parser_decl_def_use();
   test_parser_cond();
+  test_parser_rule();
   test_parser_build();
   test_parser_index();
   test_parser_size();
   test_parser_vector();
   test_parser_tuple();
-
-  test_llvm_ir();
 
   cout << "\nAll tests OK\n";
   return 0;

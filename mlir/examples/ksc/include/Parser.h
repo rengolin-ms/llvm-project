@@ -164,7 +164,7 @@ public:
   void parse() {
     assert(!rootE && "Won't overwrite root node");
     if (!rootT) tokenise();
-    rootE = parseToken(rootT.get());
+    rootE = parseBlock(rootT.get());
   }
   const Token* getRootToken() {
     return rootT.get();

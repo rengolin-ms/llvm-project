@@ -130,6 +130,10 @@ protected:
 };
 
 /// Block node has nothing but children
+///
+/// This should only be used for the program scope. Redundant parenthesis
+/// may create single blocks, which will then just pass-through the evaluation
+/// of the contained token (ie. multi-token blocks inside code are illegal).
 struct Block : public Expr {
   using Ptr = std::unique_ptr<Block>;
   Block() : Expr(Type::None, Kind::Block) {}
@@ -142,10 +146,11 @@ struct Block : public Expr {
     operands.push_back(std::move(node));
   }
   llvm::ArrayRef<Expr::Ptr> getOperands() const { return operands; }
-  Expr *getOperand(size_t idx) {
+  Expr *getOperand(size_t idx) const {
     assert(idx < operands.size() && "Offset error");
     return operands[idx].get();
   }
+  size_t size() const { return operands.size(); }
 
   void dump(size_t tab = 0) const override;
 
@@ -357,7 +362,7 @@ struct Definition : public Expr {
     assert(idx < arguments.size() && "Offset error");
     return arguments[idx].get();
   }
-  Block *getImpl() const { return llvm::dyn_cast<Block>(impl.get()); }
+  Expr *getImpl() const { return impl.get(); }
   Declaration *getProto() const { return proto.get(); }
   llvm::StringRef getName() const { return proto->getName(); }
   size_t size() const { return arguments.size(); }

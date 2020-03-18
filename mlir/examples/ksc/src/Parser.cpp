@@ -135,7 +135,9 @@ size_t Lexer::lexToken(Token *tok, size_t pos) {
         tokenStart = pos;
         break;
       case ' ':
-        // Spaces are allowed inside strings
+      case '\n':
+      case '\r':
+        // "Whitespace" is allowed inside strings
         if (isInString) {
           pos++;
           break;
@@ -155,8 +157,7 @@ size_t Lexer::lexToken(Token *tok, size_t pos) {
               make_unique<Token>(code.substr(tokenStart, pos - tokenStart)));
         }
         // Finished parsing this token
-        tokenStart = ++pos;
-        return pos;
+        return ++pos;
       case '(': {
         // Recurse into sub-tokens
         auto t = make_unique<Token>();
@@ -174,11 +175,6 @@ size_t Lexer::lexToken(Token *tok, size_t pos) {
         }
         tokenStart = ++pos;
         isInString = !isInString;
-        break;
-      case '\n':
-      case '\r':
-        // Ignore
-        tokenStart = ++pos;
         break;
       default:
         // These are text, so we keep reading
@@ -202,8 +198,14 @@ Expr::Ptr Parser::parseToken(const Token *tok) {
     return unique_ptr<Expr>(new Block());
 
   // If the first expr is not a value, this is a block of blocks
-  if (!tok->getHead()->isValue)
+  auto head = tok->getHead();
+  if (!head->isValue) {
+    // Simple pass-through
+    if (tok->size() == 1)
+      return parseToken(head);
+    // This is an actual block
     return parseBlock(tok);
+  }
 
   // First child is a value, can be all sorts of block types
   // Check first value for type
@@ -448,9 +450,6 @@ Expr::Ptr Parser::parseDef(const Token *tok) {
 
   // Function body is a block, create one if single expr
   auto body = parseToken(expr);
-  if (!Block::classof(body.get()))
-    body = make_unique<Block>(move(body));
-
   auto node = make_unique<Definition>(name->getValue(),
                                       parseType(type), move(body));
   assert(node);

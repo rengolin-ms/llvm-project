@@ -133,7 +133,7 @@ mlir::FuncOp Generator::buildDef(const AST::Definition* def) {
 
   // Lower body
   currentFunc = func;
-  auto last = buildBlock(llvm::dyn_cast<AST::Block>(def->getImpl()));
+  auto last = buildNode(def->getImpl());
 
   // Return the last value
   builder.create<mlir::ReturnOp>(UNK, last);
@@ -181,12 +181,15 @@ mlir::Value Generator::buildNode(const AST::Expr* node) {
   assert(0 && "unexpected node");
 }
 
-// Build function body
+// Builds blocks
 mlir::Value Generator::buildBlock(const AST::Block* block) {
-  mlir::Value last;
+  if (block->size() == 0)
+    return mlir::Value();
+  if (block->size() == 1)
+    return buildNode(block->getOperand(0));
   for (auto &op: block->getOperands())
-    last = buildNode(op.get());
-  return last;
+    buildNode(op.get());
+  return mlir::Value();
 }
 
 // Builds literals
