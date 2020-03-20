@@ -111,7 +111,8 @@ class Parser {
   }
   // Note: "get$i$N" is not on the list, as it needs special parsing
   const std::set<std::string > reservedWords{
-      "let", "edef", "def", "if", "build", "index", "size", "tuple", "rule"
+      "let",   "edef",   "def",   "if", "build",
+      "index", "size", "tuple", "fold",  "rule"
   };
   bool isReservedWord(std::string name) const {
     // FIXME: This should really be a regex
@@ -157,6 +158,7 @@ class Parser {
   Expr::Ptr parseSize(const Token *tok);
   Expr::Ptr parseTuple(const Token *tok);
   Expr::Ptr parseGet(const Token *tok);
+  Expr::Ptr parseFold(const Token *tok);
   Expr::Ptr parseRule(const Token *tok);
 
 public:

@@ -6,8 +6,8 @@
 ; LLVM: declare i1 @fun(i64 %0, double %1)
 
 (edef fun2 (Vec Float) (Vec Float))
-; MLIR:     func @fun2(memref<*xf64>) -> memref<*xf64>
-; LLVM:     declare { i64, i8* } @fun2(i64 %0, i8* %1)
+; MLIR:     func @fun2(memref<?xf64>) -> memref<?xf64>
+; LLVM:     declare { double*, double*, i64, [1 x i64], [1 x i64] } @fun2(double* %0, double* %1, i64 %2, i64 %3, i64 %4)
 
 (def fun@ii Integer ((ai : Integer) (bi : Integer) (ci : Integer)) (
   (add@ii (mul@ii ai bi) ci)

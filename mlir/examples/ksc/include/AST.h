@@ -546,6 +546,39 @@ private:
   Expr::Ptr expr;
 };
 
+/// Fold, ex: (fold (lambda) init vector)
+///
+/// Reduce pattern. Initialises an accumulator (acc) with (init), loops over the
+/// (vector), using (lambda) to update the accumulator value. The signature
+/// of the (lambda) MUST be:
+///   (lam AccType (acc_i : (Tuple AccType ElmType)) (expr))
+/// for (vector) of type "(Vec ElmType)" and (acc) with type "AccType".
+///
+/// Fold will iterare the vector, calling the lambda like:
+/// for elm in vector:
+///   acc = lambda((tuple acc elm))
+/// Then return (acc).
+struct Fold : public Expr {
+  using Ptr = std::unique_ptr<Fold>;
+  Fold(Type type, Expr::Ptr body, Expr::Ptr acc, Expr::Ptr vector)
+      : Expr(type, Kind::Fold), body(std::move(body)),
+      acc(std::move(acc)), vector(std::move(vector)) {}
+
+  Expr *getVector() const { return vector.get(); }
+  Expr *getAcc() const { return acc.get(); }
+  Expr *getBody() const { return body.get(); }
+
+  void dump(size_t tab = 0) const override;
+
+  /// LLVM RTTI
+  static bool classof(const Expr *c) { return c->kind == Kind::Fold; }
+
+private:
+  Expr::Ptr body;
+  Expr::Ptr acc;
+  Expr::Ptr vector;
+};
+
 /// Rule, ex: (rule "mul2" (v : Float) (mul@ff v 2.0) (add v v))
 ///
 /// Rules express ways to transform the graph. They need a special

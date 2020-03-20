@@ -44,6 +44,7 @@ class Generator {
 
   // Helpers
   Types ConvertType(const AST::Type &type, size_t dim=0);
+  mlir::Value memrefCastForCall(mlir::Value orig);
   mlir::Attribute getAttr(const AST::Expr* op);
 
   // Module level builders
@@ -66,6 +67,7 @@ class Generator {
   Values buildSize(const AST::Size* s);
   Values buildTuple(const AST::Tuple* t);
   Values buildGet(const AST::Get* g);
+  Values buildFold(const AST::Fold* g);
 
   void serialiseArgs(const AST::Definition *def, mlir::Block &entry);
 

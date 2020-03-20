@@ -92,6 +92,21 @@ static llvm::StringRef unquote(llvm::StringRef original) {
   return original.substr(start, len);
 }
 
+static Literal::Ptr getZero(Type type) {
+  switch(type) {
+    case Type::Integer:
+      return make_unique<Literal>("0", Type::Integer);
+    case Type::Float:
+      return make_unique<Literal>("0.0", Type::Float);
+    case Type::Bool:
+      return make_unique<Literal>("false", Type::Bool);
+    case Type::String:
+      return make_unique<Literal>("", Type::String);
+    default:
+      assert(0 && "Invalid zero type");
+  }
+}
+
 //================================================ Lex source into Tokens
 
 // Lex a token out, recurse if another entry point is found
@@ -231,6 +246,8 @@ Expr::Ptr Parser::parseToken(const Token *tok) {
       return parseTuple(tok);
     } else if (llvm::StringRef(value).startswith("get$")) {
       return parseGet(tok);
+    } else if (value == "fold") {
+      return parseFold(tok);
     } else if (value == "rule") {
       return parseRule(tok);
     }
@@ -489,8 +506,7 @@ Expr::Ptr Parser::parseBuild(const Token *tok) {
   // Variables are initialised as zero by default
   assert(var->kind == Expr::Kind::Variable);
   assert(var->getType() == AST::Type::Integer);
-  llvm::dyn_cast<Variable>(var.get())->setInit(
-      make_unique<Literal>("0", AST::Type::Integer));
+  llvm::dyn_cast<Variable>(var.get())->setInit(getZero(Type::Integer));
   auto body = parseToken(expr);
 
   return make_unique<Build>(move(range), move(var), move(body));
@@ -534,6 +550,33 @@ Expr::Ptr Parser::parseGet(const Token *tok) {
   size_t max = std::atol(maxStr.str().c_str());
   auto var = parseToken(tok->getChild(1));
   return make_unique<Get>(idx, max, move(var));
+}
+
+// Fold, ex: (fold (lambda) init vector)
+Expr::Ptr Parser::parseFold(const Token *tok) {
+  assert(tok->size() == 4);
+  // Lambda format: (lam (acc_x : (Tuple AccTy ElmTy)) (expr))
+  const Token *lam = tok->getChild(1);
+  assert(!lam->isValue);
+  assert(lam->getChild(0)->isValue && lam->getChild(0)->getValue() == "lam");
+  auto var = parseVariable(lam->getChild(1));
+  assert(var->kind == Expr::Kind::Variable);
+  assert(var->getType() == Type::Tuple);
+  auto accTy = var->getType().getSubType(0);
+  auto elmTy = var->getType().getSubType(1);
+  // Variable initialiser is (init, zero)
+  vector<Expr::Ptr> initArgs;
+  initArgs.push_back(parseToken(tok->getChild(2)));
+  initArgs.push_back(getZero(elmTy));
+  auto init = make_unique<Tuple>(move(initArgs));
+  llvm::dyn_cast<Variable>(var.get())->setInit(move(init));
+  // Lambda body has same as accTy
+  auto body = parseToken(lam->getChild(2));
+  assert(body->getType() == accTy);
+  auto vector = parseToken(tok->getChild(3));
+  assert(vector->getType() == Type::Vector);
+  assert(vector->getType().getSubType() == elmTy);
+  return make_unique<Fold>(accTy, move(body), move(var), move(vector));
 }
 
 // Rule: (rule "mul2" (v : Float) (mul@ff v 2.0) (add v v))
@@ -707,6 +750,17 @@ void Get::dump(size_t tab) const {
   cout << string(tab + 2, ' ') << "index [" << index << "]" << endl;
   cout << string(tab + 2, ' ') << "From:" << endl;
   expr->dump(tab + 4);
+}
+
+void Fold::dump(size_t tab) const {
+  cout << string(tab, ' ') << "Fold:" << endl;
+  Expr::dump(tab + 2);
+  cout << string(tab + 2, ' ') << "Lambda:" << endl;
+  body->dump(tab + 4);
+  cout << string(tab + 2, ' ') << "Accumulator:" << endl;
+  acc->dump(tab + 4);
+  cout << string(tab + 2, ' ') << "Vector:" << endl;
+  vector->dump(tab + 4);
 }
 
 void Rule::dump(size_t tab) const {

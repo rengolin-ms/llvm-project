@@ -40,7 +40,7 @@ Types Generator::ConvertType(const AST::Type &type, size_t dim) {
     if (dim)
       return {mlir::MemRefType::get(dim, ConvertType(type.getSubType())[0])};
     else
-      return {mlir::UnrankedMemRefType::get(ConvertType(type.getSubType())[0], 0)};
+      return {mlir::MemRefType::get(-1, ConvertType(type.getSubType())[0])};
   case AST::Type::Tuple: {
     // FIXME: support nested tuples
     Types subTys;
@@ -53,6 +53,16 @@ Types Generator::ConvertType(const AST::Type &type, size_t dim) {
   default:
     assert(0 && "Unsupported type");
   }
+}
+
+// Cast to memref<?xTy> from any static type, so that we can call functions
+// that have vectors as arguments (as they're all unknwon size)
+mlir::Value Generator::memrefCastForCall(mlir::Value orig) {
+  assert(orig.getType().isa<mlir::MemRefType>());
+  auto type = orig.getType().cast<mlir::MemRefType>();
+  auto subTy = type.getElementType();
+  auto newTy = mlir::MemRefType::get(-1, subTy);
+  return builder.create<mlir::MemRefCastOp>(UNK, orig, newTy);
 }
 
 // Tuple arguments are serialised, but still accessed by the tuple name (via
@@ -225,6 +235,8 @@ Values Generator::buildNode(const AST::Expr* node) {
     return buildTuple(llvm::dyn_cast<AST::Tuple>(node));
   if (AST::Get::classof(node))
     return buildGet(llvm::dyn_cast<AST::Get>(node));
+  if (AST::Fold::classof(node))
+    return buildFold(llvm::dyn_cast<AST::Fold>(node));
   // TODO: Implement all node types
   assert(0 && "unexpected node");
 }
@@ -259,7 +271,15 @@ Values Generator::buildOp(const AST::Operation* op) {
     Values operands;
     for (auto &arg: op->getOperands()) {
       auto range = buildNode(arg.get());
-      operands.append(range.begin(), range.end());
+      // Tuples
+      if (range.size() > 1)
+        operands.append(range.begin(), range.end());
+      // Vectors
+      else if (range[0].getType().isa<mlir::MemRefType>())
+        operands.push_back(memrefCastForCall(range[0]));
+      // Everything else
+      else
+        operands.push_back(range[0]);
     }
     assert(func.getNumArguments() == operands.size() && "Arguments mismatch");
 
@@ -453,6 +473,92 @@ Values Generator::buildGet(const AST::Get* g) {
 
   // A get on a constant, just returns the element directly
   return buildNode(g->getElement());
+}
+
+// Builds fold (TODO: common up with build)
+Values Generator::buildFold(const AST::Fold* g) {
+  // Fold needs a tuple of two variables: the accumulator and the induction
+  auto v = llvm::dyn_cast<AST::Variable>(g->getVector());
+  auto acc = llvm::dyn_cast<AST::Variable>(g->getAcc());
+  assert(v && acc && "Wrong AST node for vector and/or accumulator");
+  assert(g->getType().isScalar() && "Bad accumulator type in fold");
+  assert(acc->getType() == AST::Type::Tuple && "Bad accumulator type in fold");
+  assert(g->getType() == acc->getType().getSubType(0));
+  assert(v->getType() == AST::Type::Vector && "Bad vector type in fold");
+  assert(v->getType().getSubType() == acc->getType().getSubType(1));
+  // We can't build the variable here yet because this is an SSA representation
+  // and the body will get the wrong reference, so we just initialise the
+  // accumulator (the element x will be initialised by the load block)
+  auto init = buildNode(acc->getInit());
+  // Context variables: vector (and elm type), max, IV init to zero
+  auto ivTy = builder.getIntegerType(64);
+  auto accTy = init[0].getType();
+  auto elmTy = init[1].getType();
+  auto vec = buildNode(v)[0];
+  auto dim = builder.create<mlir::DimOp>(UNK, vec, 0);
+  auto max = builder.create<mlir::IndexCastOp>(UNK, dim, ivTy);
+  auto zeroAttr = builder.getIntegerAttr(ivTy, 0);
+  auto zero = builder.create<mlir::ConstantOp>(UNK, ivTy, zeroAttr);
+
+  // Create all basic blocks and the condition
+  auto headBlock = currentFunc.addBlock();
+  headBlock->addArgument(accTy);
+  headBlock->addArgument(ivTy);
+  auto loadBlock = currentFunc.addBlock();
+  loadBlock->addArgument(accTy);
+  loadBlock->addArgument(ivTy);
+  auto bodyBlock = currentFunc.addBlock();
+  bodyBlock->addArgument(accTy);
+  bodyBlock->addArgument(elmTy);
+  bodyBlock->addArgument(ivTy);
+  auto tailBlock = currentFunc.addBlock();
+  tailBlock->addArgument(accTy);
+  mlir::ValueRange indArg {init[0], zero};
+  builder.create<mlir::BranchOp>(UNK, headBlock, indArg);
+
+  // The head block only checks the condition, we can't load anything until
+  // we know that it's safe to do so (for example, empty vectors)
+  builder.setInsertionPointToEnd(headBlock);
+  auto headAcc = headBlock->getArgument(0);
+  auto headIv = headBlock->getArgument(1);
+  auto cond = builder.create<mlir::CmpIOp>(UNK, mlir::CmpIPredicate::slt,
+                                           headIv, max);
+  mlir::ValueRange loadArgs{headAcc, headIv};
+  mlir::ValueRange exitArgs{headAcc};
+  builder.create<mlir::CondBranchOp>(UNK, cond, loadBlock, loadArgs, tailBlock,
+                                     exitArgs);
+
+  // The load block just fetches the element from the vector and passes as
+  // a serialised tuple { acc, x } to the body. If got here, assume it's safe
+  // to load the element "loadIv" from the vector
+  builder.setInsertionPointToEnd(loadBlock);
+  auto loadAcc = loadBlock->getArgument(0);
+  auto loadIv = loadBlock->getArgument(1);
+  auto indTy = builder.getIndexType();
+  auto indIdx = builder.create<mlir::IndexCastOp>(UNK, loadIv, indTy);
+  mlir::ValueRange rangeIdx {indIdx};
+  auto loaded = builder.create<mlir::LoadOp>(UNK, vec, rangeIdx);
+  mlir::ValueRange loadArg {loadAcc, loaded, loadIv};
+  builder.create<mlir::BranchOp>(UNK, bodyBlock, loadArg);
+
+  // Loop over the body of the lambda
+  builder.setInsertionPointToEnd(bodyBlock);
+  auto bodyAcc = bodyBlock->getArgument(0);
+  auto bodyElm = bodyBlock->getArgument(1);
+  auto bodyIv = bodyBlock->getArgument(2);
+  declareVariable(acc->getName(), {bodyAcc, bodyElm});
+  auto newAcc = buildNode(g->getBody())[0];
+  // Increment IV
+  auto oneAttr = builder.getIntegerAttr(ivTy, 1);
+  auto one = builder.create<mlir::ConstantOp>(UNK, ivTy, oneAttr);
+  auto incr = builder.create<mlir::AddIOp>(UNK, bodyIv, one);
+  mlir::ValueRange headArg {newAcc, incr};
+  builder.create<mlir::BranchOp>(UNK, headBlock, headArg);
+
+  // And return the accumulator
+  builder.setInsertionPointToEnd(tailBlock);
+  auto tailAcc = tailBlock->getArgument(0);
+  return mlir::ValueRange{tailAcc};
 }
 
 // Lower constant literals

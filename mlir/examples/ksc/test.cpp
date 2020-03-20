@@ -531,6 +531,77 @@ void test_parser_get() {
   cout << "    OK\n";
 }
 
+void test_parser_fold() {
+  cout << "\n == test_parser_fold\n";
+  const Expr::Ptr tree = parse("(def fun Float (v : (Vec Float))"
+                               "(fold (lam (acc_x : (Tuple Float Float))"
+                               "   (let ((acc (get$1$2 acc_x))"
+                               "         (x   (get$2$2 acc_x)))"
+                               "         (mul@ff acc x)))"
+                               "    1.0"
+                               "    v))");
+
+  // Root can have many exprs, here two
+  Block* root = llvm::dyn_cast<Block>(tree.get());
+  assert(root);
+  Definition* def = llvm::dyn_cast<Definition>(root->getOperand(0));
+  assert(def);
+  // Kind is Fold
+  Fold* fold = llvm::dyn_cast<Fold>(def->getImpl());
+  assert(fold);
+  assert(fold->getType() == Type::Float);
+  // Vector
+  Variable* vec = llvm::dyn_cast<Variable>(fold->getVector());
+  assert(vec);
+  assert(vec->getType() == Type::Vector);
+  assert(vec->getType().getSubType() == Type::Float);
+  assert(vec->getName() == "v");
+  // Accumulator
+  Variable* acc = llvm::dyn_cast<Variable>(fold->getAcc());
+  assert(acc);
+  assert(acc->getType() == Type::Tuple);
+  assert(acc->getType().getSubType(0) == Type::Float);
+  assert(acc->getType().getSubType(1) == Type::Float);
+  Tuple* init = llvm::dyn_cast<Tuple>(acc->getInit());
+  assert(init);
+  Literal* init0 = llvm::dyn_cast<Literal>(init->getElement(0));
+  assert(init0);
+  assert(init0->getType() == Type::Float);
+  assert(init0->getValue() == "1.0");
+  Literal* init1 = llvm::dyn_cast<Literal>(init->getElement(1));
+  assert(init1);
+  assert(init1->getType() == Type::Float);
+  assert(init1->getValue() == "0.0");
+  // Lambda variables
+  Let* let = llvm::dyn_cast<Let>(fold->getBody());
+  assert(let);
+  assert(let->getType() == Type::Float);
+  Variable* letAcc = llvm::dyn_cast<Variable>(let->getVariable(0));
+  assert(letAcc);
+  assert(letAcc->getType() == Type::Float);
+  assert(letAcc->getName() == "acc");
+  assert(Get::classof(letAcc->getInit()));
+  Variable* letX = llvm::dyn_cast<Variable>(let->getVariable(1));
+  assert(letX);
+  assert(letX->getType() == Type::Float);
+  assert(letX->getName() == "x");
+  assert(Get::classof(letX->getInit()));
+  // Lambda operation
+  Operation* op = llvm::dyn_cast<Operation>(let->getExpr());
+  assert(op);
+  assert(op->getType() == Type::Float);
+  assert(op->getName() == "mul@ff");
+  Variable* mulAcc = llvm::dyn_cast<Variable>(op->getOperand(0));
+  assert(mulAcc);
+  assert(mulAcc->getType() == Type::Float);
+  assert(mulAcc->getName() == "acc");
+  Variable* mulX = llvm::dyn_cast<Variable>(op->getOperand(1));
+  assert(mulX);
+  assert(mulX->getType() == Type::Float);
+  assert(mulX->getName() == "x");
+  cout << "    OK\n";
+}
+
 int test_all(int v=0) {
   verbose = v;
 
@@ -551,6 +622,7 @@ int test_all(int v=0) {
   test_parser_tuple_type();
   test_parser_tuple();
   test_parser_get();
+  test_parser_fold();
 
   cout << "\nAll tests OK\n";
   return 0;
