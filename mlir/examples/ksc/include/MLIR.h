@@ -25,8 +25,6 @@ namespace MLIR {
 using Types = llvm::SmallVector<mlir::Type, 4>;
 using Values = llvm::SmallVector<mlir::Value, 4>;
 class Generator {
-  // TODO: Make this optional
-  const int optimise = 0;
   // The main module
   mlir::OwningModuleRef module;
   // The current builder
@@ -80,7 +78,7 @@ public:
   // Build from KSC AST
   const mlir::ModuleOp build(const AST::Expr* root);
   // Emit LLVM IR
-  std::unique_ptr<llvm::Module> emitLLVM();
+  std::unique_ptr<llvm::Module> emitLLVM(int optLevel=0);
 };
 
 } // namespace MLIR

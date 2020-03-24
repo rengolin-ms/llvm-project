@@ -599,10 +599,10 @@ const mlir::ModuleOp Generator::build(const std::string& mlir) {
 
 //============================================================ LLVM IR Lowering
 
-unique_ptr<llvm::Module> Generator::emitLLVM() {
+unique_ptr<llvm::Module> Generator::emitLLVM(int optLevel) {
   // The lowering pass manager
   mlir::PassManager pm(&context);
-  if (optimise > 0) {
+  if (optLevel > 0) {
     pm.addPass(mlir::createInlinerPass());
     pm.addPass(mlir::createSymbolDCEPass());
     mlir::OpPassManager &optPM = pm.nest<mlir::FuncOp>();
