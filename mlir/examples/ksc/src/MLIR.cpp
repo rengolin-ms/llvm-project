@@ -237,7 +237,6 @@ Values Generator::buildNode(const AST::Expr* node) {
     return buildGet(llvm::dyn_cast<AST::Get>(node));
   if (AST::Fold::classof(node))
     return buildFold(llvm::dyn_cast<AST::Fold>(node));
-  // TODO: Implement all node types
   assert(0 && "unexpected node");
 }
 
@@ -406,7 +405,6 @@ Values Generator::buildBuild(const AST::Build* b) {
   declareVariable(var);
   variables[var->getName()] = {bodyIv};
   // Build body and store result
-  // FIXME: Support vector of Tuples
   auto expr = buildNode(b->getExpr())[0];
   auto indTy = builder.getIndexType();
   auto indIv = builder.create<mlir::IndexCastOp>(UNK, bodyIv, indTy);
@@ -475,7 +473,8 @@ Values Generator::buildGet(const AST::Get* g) {
   return buildNode(g->getElement());
 }
 
-// Builds fold (TODO: common up with build)
+// Builds fold
+// FIXME: use loop.for, common up with build
 Values Generator::buildFold(const AST::Fold* g) {
   // Fold needs a tuple of two variables: the accumulator and the induction
   auto v = llvm::dyn_cast<AST::Variable>(g->getVector());

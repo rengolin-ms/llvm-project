@@ -76,7 +76,7 @@ static Type LiteralType(llvm::StringRef str) {
       return Type::Integer;
   }
 
-  // TODO: detect Tuple, Vec, Lambda, LM
+  // No literals for Tuple, Vec, Lambda, LM
   return Type::None;
 }
 
@@ -251,7 +251,6 @@ Expr::Ptr Parser::parseToken(const Token *tok) {
     } else if (value == "rule") {
       return parseRule(tok);
     }
-    // TODO: implement fold, lambda, tuple, apply
     assert(0 && "Not implemented yet");
   }
 
@@ -322,8 +321,7 @@ Expr::Ptr Parser::parseValue(const Token *tok) {
   // Variable use: name (without quotes)
   assert(variables.exists(value) && "Variable not declared");
   auto val = variables.get(value);
-  // For now, we duplicate the variable
-  // TODO: Maybe call a function with the init inside?
+  // Create new node, referencing existing variable
   assert(Variable::classof(val));
   return unique_ptr<Expr>(new Variable(value, val->getType()));
 }
@@ -384,8 +382,7 @@ Expr::Ptr Parser::parseVariable(const Token *tok) {
   }
 
   // Variable definition: (name value) : check name on SymbolTable
-  // TODO: This is naive, we need to check context, too
-  if (tok->size() == 2) {
+  if (tok->size() == 2 && !variables.exists(value)) {
     // Add to map fist, to allow recursion
     auto var = unique_ptr<Variable>(new Variable(value));
     variables.add(value, var.get());

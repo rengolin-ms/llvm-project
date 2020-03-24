@@ -7,8 +7,7 @@ using namespace Knossos::AST;
 using namespace Knossos::MLIR;
 using namespace std;
 
-// Hack to get tests working
-// FIXME: Use gtest or similar
+// Fwd declaration of tests (use gtest)
 int test_all(int v=0);
 
 // Simple source selection based table

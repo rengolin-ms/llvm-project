@@ -109,10 +109,9 @@ struct Expr {
     Size,
     Tuple,
     Get,
-    /// Unused below (TODO: Implement those)
     Fold,
-    Lambda,
-    Apply,
+    /// Unused below (TODO: Implement those)
+    Print,
     Assert
   };
 

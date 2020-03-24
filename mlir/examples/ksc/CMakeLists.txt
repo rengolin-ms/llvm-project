@@ -19,7 +19,6 @@ add_ksc_tool(ksc-mlir
   include/AST.h
   include/MLIR.h
   include/Parser.h
-  include/SymbolTable.h
   )
 
 include_directories(include/)
