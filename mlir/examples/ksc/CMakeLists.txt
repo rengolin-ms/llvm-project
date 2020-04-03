@@ -24,16 +24,19 @@ add_ksc_tool(ksc-mlir
 include_directories(include/)
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
 include_directories(${CMAKE_CURRENT_BINARY_DIR}/include/)
+get_property(dialect_libs GLOBAL PROPERTY MLIR_DIALECT_LIBS)
+get_property(conversion_libs GLOBAL PROPERTY MLIR_CONVERSION_LIBS)
 target_link_libraries(ksc-mlir
   PRIVATE
-    MLIRAllDialects
-    MLIRAffineToStandard
+    ${dialect_libs}
+    ${conversion_libs}
     MLIRAnalysis
+    MLIRCallInterfaces
+    MLIRExecutionEngine
     MLIRIR
-    MLIRLoopToStandard
     MLIRParser
     MLIRPass
-    MLIRStandardToLLVM
+    MLIRSideEffects
     MLIRTargetLLVMIR
     MLIRTransforms
     )
